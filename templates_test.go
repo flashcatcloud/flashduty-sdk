@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,9 @@ func TestChannelEnumValues(t *testing.T) {
 	found := make(map[string]bool)
 	for _, ch := range channels {
 		found[ch] = true
+	}
+	if !slices.IsSorted(channels) {
+		t.Fatal("expected channel enum values to be sorted")
 	}
 	for k := range want {
 		if !found[k] {

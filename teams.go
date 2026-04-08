@@ -44,6 +44,11 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 				Items []struct {
 					TeamID   int64  `json:"team_id"`
 					TeamName string `json:"team_name"`
+					Members  []struct {
+						PersonID   int64  `json:"person_id"`
+						PersonName string `json:"person_name"`
+						Email      string `json:"email,omitempty"`
+					} `json:"members,omitempty"`
 				} `json:"items"`
 			} `json:"data,omitempty"`
 		}
@@ -57,10 +62,21 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 		teams := []TeamInfo{}
 		if result.Data != nil {
 			for _, t := range result.Data.Items {
-				teams = append(teams, TeamInfo{
+				team := TeamInfo{
 					TeamID:   t.TeamID,
 					TeamName: t.TeamName,
-				})
+				}
+				if len(t.Members) > 0 {
+					team.Members = make([]TeamMember, 0, len(t.Members))
+					for _, m := range t.Members {
+						team.Members = append(team.Members, TeamMember{
+							PersonID:   m.PersonID,
+							PersonName: m.PersonName,
+							Email:      m.Email,
+						})
+					}
+				}
+				teams = append(teams, team)
 			}
 		}
 
