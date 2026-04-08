@@ -1,6 +1,6 @@
 # flashduty-sdk
 
-Go SDK for the [FlashDuty](https://flashcat.cloud) API. Provides typed methods for incident management, on-call scheduling, status pages, and more.
+Go SDK for the [FlashDuty](https://flashcat.cloud) API. Provides typed methods for incident management, on-call scheduling, status pages, notification templates, and more.
 
 ## Installation
 
@@ -52,6 +52,12 @@ client, err := flashduty.NewClient("your-app-key",
 	flashduty.WithTimeout(10 * time.Second),
 	flashduty.WithUserAgent("my-app/1.0"),
 	flashduty.WithHTTPClient(customHTTPClient),
+	flashduty.WithLogger(myLogger),
+	flashduty.WithRequestHeaders(staticHeaders),
+	flashduty.WithRequestHook(func(req *http.Request) {
+		// Inject per-request headers (e.g., W3C Trace Context)
+		req.Header.Set("traceparent", traceID)
+	}),
 )
 ```
 
@@ -61,6 +67,51 @@ client, err := flashduty.NewClient("your-app-key",
 | `WithTimeout` | `30s` | HTTP client timeout |
 | `WithUserAgent` | `flashduty-go-sdk` | User-Agent header |
 | `WithHTTPClient` | Default `http.Client` | Custom HTTP client |
+| `WithLogger` | `slog`-based logger | Custom logger implementing `Logger` interface |
+| `WithRequestHeaders` | none | Static headers included in every request |
+| `WithRequestHook` | none | Callback invoked on every outgoing request before it is sent |
+
+### Dynamic User-Agent
+
+The User-Agent can be updated after client creation (e.g., per-session):
+
+```go
+client.SetUserAgent("my-app/2.0 (client-name/1.2)")
+```
+
+## Logger Interface
+
+The SDK uses a pluggable logger. The default implementation wraps `log/slog`.
+
+```go
+type Logger interface {
+	Debug(msg string, keysAndValues ...any)
+	Info(msg string, keysAndValues ...any)
+	Warn(msg string, keysAndValues ...any)
+	Error(msg string, keysAndValues ...any)
+}
+```
+
+To adapt logrus or other backends:
+
+```go
+type logrusAdapter struct{ *logrus.Logger }
+
+func (a *logrusAdapter) Info(msg string, kv ...any)  { a.WithFields(kvToFields(kv)).Info(msg) }
+func (a *logrusAdapter) Warn(msg string, kv ...any)  { a.WithFields(kvToFields(kv)).Warn(msg) }
+func (a *logrusAdapter) Error(msg string, kv ...any) { a.WithFields(kvToFields(kv)).Error(msg) }
+func (a *logrusAdapter) Debug(msg string, kv ...any) { a.WithFields(kvToFields(kv)).Debug(msg) }
+
+func kvToFields(kv []any) logrus.Fields {
+	fields := make(logrus.Fields, len(kv)/2)
+	for i := 0; i+1 < len(kv); i += 2 {
+		if key, ok := kv[i].(string); ok {
+			fields[key] = kv[i+1]
+		}
+	}
+	return fields
+}
+```
 
 ## API Reference
 
@@ -149,6 +200,40 @@ client.CreateStatusIncident(ctx, &CreateStatusIncidentInput{...}) (any, error)
 // Add a timeline update to a status page incident or maintenance
 client.CreateChangeTimeline(ctx, &CreateChangeTimelineInput{...}) error
 ```
+
+### Templates
+
+```go
+// Fetch the preset (default) notification template for a channel
+client.GetPresetTemplate(ctx, &GetPresetTemplateInput{...}) (*GetPresetTemplateOutput, error)
+
+// Validate and preview a notification template with size-limit checks
+client.ValidateTemplate(ctx, &ValidateTemplateInput{...}) (*ValidateTemplateOutput, error)
+```
+
+#### Static Template Data
+
+These package-level functions return compiled-in reference data for template authoring:
+
+```go
+// Available template variables (40 variables across 7 categories)
+flashduty.TemplateVariables() []TemplateVariable
+
+// Custom FlashDuty template functions (19 functions)
+flashduty.TemplateCustomFunctions() []TemplateFunction
+
+// Commonly used Sprig template functions (19 functions)
+flashduty.TemplateSprigFunctions() []TemplateFunction
+
+// Valid notification channel identifiers (13 channels)
+flashduty.ChannelEnumValues() []string
+```
+
+Supported channels: `dingtalk`, `dingtalk_app`, `feishu`, `feishu_app`, `wecom`, `wecom_app`, `slack`, `slack_app`, `telegram`, `teams_app`, `email`, `sms`, `zoom`.
+
+Channel size limits and channel-to-field mappings are available via `flashduty.ChannelSizeLimits` and `flashduty.TemplateChannels`.
+
+> **Note:** Static template data is compiled into the SDK. Platform-side additions require an SDK release.
 
 ## Data Enrichment
 
