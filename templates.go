@@ -233,7 +233,7 @@ func TemplateVariables() []TemplateVariable {
 	return result
 }
 
-// TemplateCustomFunctions returns the list of custom FlashDuty template functions.
+// TemplateCustomFunctions returns the list of custom Flashduty template functions.
 //
 // NOTE: This data is compiled into the SDK. Platform-side additions require an SDK release.
 func TemplateCustomFunctions() []TemplateFunction {
@@ -292,7 +292,7 @@ var templateVariables = []TemplateVariable{
 	// Context fields
 	{".ChannelName", "string", "Collaboration space name", "Order system", "context"},
 	{".ChannelID", "int64", "Collaboration space ID", "", "context"},
-	{".AccountName", "string", "Account/organization name", "FlashDuty", "context"},
+	{".AccountName", "string", "Account/organization name", "Flashduty", "context"},
 	{".AccountLocale", "string", "Locale: zh-CN or en-US", "zh-CN", "context"},
 	{".AccountTimeZone", "string", "Account timezone", "", "context"},
 

@@ -21,7 +21,7 @@ const (
 	defaultLogPreviewSize = 500
 )
 
-// Client represents a FlashDuty API client
+// Client represents a Flashduty API client
 type Client struct {
 	httpClient *http.Client
 	baseURL    *url.URL
@@ -33,7 +33,7 @@ type Client struct {
 	optionErr      error               // collects errors from functional options
 }
 
-// makeRequest makes an HTTP request to the FlashDuty API
+// makeRequest makes an HTTP request to the Flashduty API
 func (c *Client) makeRequest(ctx context.Context, method, path string, body any) (*http.Response, error) {
 	var reqBody io.Reader
 	var reqBodyBytes []byte

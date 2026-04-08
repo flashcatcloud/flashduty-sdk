@@ -72,7 +72,7 @@ func WithRequestHook(hook func(*http.Request)) Option {
 	}
 }
 
-// NewClient creates a new FlashDuty API client
+// NewClient creates a new Flashduty API client
 func NewClient(appKey string, opts ...Option) (*Client, error) {
 	if appKey == "" {
 		return nil, fmt.Errorf("APP key is required")

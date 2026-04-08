@@ -1,6 +1,6 @@
 # flashduty-sdk
 
-Go SDK for the [FlashDuty](https://flashcat.cloud) API. Provides typed methods for incident management, on-call scheduling, status pages, notification templates, and more.
+Go SDK for the [Flashduty](https://flashcat.cloud) API. Provides typed methods for incident management, on-call scheduling, status pages, notification templates, and more.
 
 ## Installation
 
@@ -219,7 +219,7 @@ These package-level functions return compiled-in reference data for template aut
 // Available template variables (40 variables across 7 categories)
 flashduty.TemplateVariables() []TemplateVariable
 
-// Custom FlashDuty template functions (19 functions)
+// Custom Flashduty template functions (19 functions)
 flashduty.TemplateCustomFunctions() []TemplateFunction
 
 // Commonly used Sprig template functions (19 functions)
