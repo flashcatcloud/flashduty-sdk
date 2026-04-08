@@ -23,12 +23,12 @@ const (
 
 // Client represents a Flashduty API client
 type Client struct {
-	httpClient *http.Client
-	baseURL    *url.URL
-	appKey     string
-	userAgent  string
+	httpClient     *http.Client
+	baseURL        *url.URL
+	appKey         string
+	userAgent      string
 	logger         Logger
-	requestHeaders http.Header        // static headers injected into every request
+	requestHeaders http.Header         // static headers injected into every request
 	requestHook    func(*http.Request) // callback invoked before every request
 	optionErr      error               // collects errors from functional options
 }
@@ -59,12 +59,6 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body any)
 	query.Set("app_key", c.appKey)
 	fullURL.RawQuery = query.Encode()
 
-	c.logger.Info("duty request",
-		"method", method,
-		"url", sanitizeURL(fullURL),
-		"body", truncateBody(string(reqBodyBytes)),
-	)
-
 	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -89,6 +83,10 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body any)
 	if c.requestHook != nil {
 		c.requestHook(req)
 	}
+
+	logAttrs := traceLogAttrsFromRequest(req)
+	logAttrs = append(logAttrs, "method", method, "url", sanitizeURL(fullURL), "body", truncateBody(string(reqBodyBytes)))
+	c.logger.Info("duty request", logAttrs...)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -130,6 +128,38 @@ func sanitizeError(err error) string {
 	return errStr[:idx] + "app_key=[REDACTED]" + errStr[idx+endIdx:]
 }
 
+func traceIDFromHeaders(headers http.Header) string {
+	traceparent := headers.Get("traceparent")
+	if traceparent == "" {
+		return ""
+	}
+
+	parts := strings.Split(traceparent, "-")
+	if len(parts) != 4 {
+		return ""
+	}
+
+	traceID := parts[1]
+	if len(traceID) != 32 {
+		return ""
+	}
+
+	return traceID
+}
+
+func traceLogAttrsFromRequest(req *http.Request) []any {
+	if req == nil {
+		return nil
+	}
+
+	traceID := traceIDFromHeaders(req.Header)
+	if traceID == "" {
+		return nil
+	}
+
+	return []any{"trace_id", traceID}
+}
+
 // parseResponse parses the HTTP response into the given interface.
 func parseResponse(logger Logger, resp *http.Response, v any) error {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
@@ -137,10 +167,11 @@ func parseResponse(logger Logger, resp *http.Response, v any) error {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	logAttrs := []any{
+	logAttrs := traceLogAttrsFromRequest(resp.Request)
+	logAttrs = append(logAttrs,
 		"status", resp.StatusCode,
 		"body", truncateBody(string(body)),
-	}
+	)
 
 	requestID := resp.Header.Get("Flashcat-Request-Id")
 
@@ -165,7 +196,6 @@ func parseResponse(logger Logger, resp *http.Response, v any) error {
 	return nil
 }
 
-
 // handleAPIError reads the response body and returns a detailed error message.
 // This function should be called when resp.StatusCode != http.StatusOK.
 func handleAPIError(logger Logger, resp *http.Response) error {
@@ -174,10 +204,11 @@ func handleAPIError(logger Logger, resp *http.Response) error {
 		return fmt.Errorf("API request failed (HTTP %d): unable to read response body: %v", resp.StatusCode, err)
 	}
 
-	logAttrs := []any{
+	logAttrs := traceLogAttrsFromRequest(resp.Request)
+	logAttrs = append(logAttrs,
 		"status", resp.StatusCode,
 		"body", truncateBody(string(body)),
-	}
+	)
 
 	requestID := resp.Header.Get("Flashcat-Request-Id")
 

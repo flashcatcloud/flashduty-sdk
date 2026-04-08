@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 )
 
 // PresetTemplateID is the fixed MongoDB ObjectID for the system preset template
@@ -50,13 +51,13 @@ func ChannelEnumValues() []string {
 	for k := range TemplateChannels {
 		channels = append(channels, k)
 	}
+	slices.Sort(channels)
 	return channels
 }
 
 // GetPresetTemplateInput contains parameters for fetching a preset template.
 type GetPresetTemplateInput struct {
 	Channel string // Required. One of the keys in TemplateChannels.
-	Locale  string // Optional. "zh-CN" (default) or "en-US".
 }
 
 // GetPresetTemplateOutput contains the preset template result.
