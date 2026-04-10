@@ -12,6 +12,7 @@ const defaultTeamsQueryLimit = 20
 type ListTeamsInput struct {
 	TeamIDs []int64 // Direct lookup by team IDs
 	Name    string  // Search by team name
+	Page    int     // Page number (default 1)
 }
 
 // ListTeamsOutput contains the result of listing teams
@@ -87,8 +88,12 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 	}
 
 	// List all teams
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
 	requestBody := map[string]any{
-		"p":     1,
+		"p":     page,
 		"limit": defaultTeamsQueryLimit,
 	}
 	if input.Name != "" {

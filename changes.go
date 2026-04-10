@@ -16,6 +16,7 @@ type ListChangesInput struct {
 	EndTime   int64    // Unix timestamp (seconds)
 	Type      string   // Filter by change type
 	Limit     int      // Max results (default 20)
+	Page      int      // Page number (default 1)
 }
 
 // ListChangesOutput contains the result of listing changes
@@ -31,8 +32,12 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 		limit = 20
 	}
 
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
 	requestBody := map[string]any{
-		"p":     1,
+		"p":     page,
 		"limit": limit,
 	}
 

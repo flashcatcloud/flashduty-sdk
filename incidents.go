@@ -20,6 +20,7 @@ type ListIncidentsInput struct {
 	EndTime       int64    // Unix timestamp (seconds), required if no IncidentIDs
 	Title         string   // Keyword search in incident title
 	Limit         int      // Max results (default 20, max 100)
+	Page          int      // Page number (default 1)
 	IncludeAlerts bool     // Whether to include alerts preview (default true)
 }
 
@@ -45,7 +46,11 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 		if input.StartTime == 0 || input.EndTime == 0 {
 			return nil, fmt.Errorf("both start_time and end_time are required for time-based queries")
 		}
-		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, input.ChannelID, input.StartTime, input.EndTime, input.Title, limit)
+		page := input.Page
+		if page <= 0 {
+			page = 1
+		}
+		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, input.ChannelID, input.StartTime, input.EndTime, input.Title, limit, page)
 	}
 
 	if err != nil {
@@ -436,9 +441,9 @@ func (c *Client) fetchIncidentsByIDs(ctx context.Context, incidentIDs []string) 
 }
 
 // fetchIncidentsByFilters fetches incidents by filters
-func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelID, startTime, endTime int64, title string, limit int) ([]RawIncident, error) {
+func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelID, startTime, endTime int64, title string, limit, page int) ([]RawIncident, error) {
 	requestBody := map[string]any{
-		"p":          1,
+		"p":          page,
 		"limit":      limit,
 		"start_time": startTime,
 		"end_time":   endTime,

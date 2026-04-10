@@ -13,6 +13,7 @@ type ListMembersInput struct {
 	PersonIDs []int64 // Direct lookup by person IDs
 	Name      string  // Search by member name (fuzzy match)
 	Email     string  // Search by email address
+	Page      int     // Page number (default 1)
 }
 
 // ListMembersOutput contains the result of listing members
@@ -45,8 +46,12 @@ func (c *Client) ListMembers(ctx context.Context, input *ListMembersInput) (*Lis
 	}
 
 	// List all members with optional filters
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
 	requestBody := map[string]any{
-		"p":     1,
+		"p":     page,
 		"limit": defaultMembersQueryLimit,
 	}
 	if input.Name != "" {
