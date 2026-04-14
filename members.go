@@ -54,11 +54,12 @@ func (c *Client) ListMembers(ctx context.Context, input *ListMembersInput) (*Lis
 		"p":     page,
 		"limit": defaultMembersQueryLimit,
 	}
+	// The API expects a single "query" field for fuzzy search.
+	// Name takes priority over Email when both are provided.
 	if input.Name != "" {
-		requestBody["member_name"] = input.Name
-	}
-	if input.Email != "" {
-		requestBody["email"] = input.Email
+		requestBody["query"] = input.Name
+	} else if input.Email != "" {
+		requestBody["query"] = input.Email
 	}
 
 	resp, err := c.makeRequest(ctx, "POST", "/member/list", requestBody)

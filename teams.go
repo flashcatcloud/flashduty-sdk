@@ -97,7 +97,7 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 		"limit": defaultTeamsQueryLimit,
 	}
 	if input.Name != "" {
-		requestBody["team_name"] = input.Name
+		requestBody["query"] = input.Name
 	}
 
 	resp, err := c.makeRequest(ctx, "POST", "/team/list", requestBody)
