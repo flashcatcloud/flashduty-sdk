@@ -538,3 +538,32 @@ type AlertEvent struct {
 	CreatedAt       int64             `json:"created_at,omitempty" toon:"created_at,omitempty"`
 	UpdatedAt       int64             `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
 }
+
+// Alert represents a deduplicated alert entity (Layer 1)
+type Alert struct {
+	AlertID         string            `json:"alert_id" toon:"alert_id"`
+	ChannelID       int64             `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	ChannelName     string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	IntegrationID   int64             `json:"integration_id,omitempty" toon:"integration_id,omitempty"`
+	IntegrationName string            `json:"integration_name,omitempty" toon:"integration_name,omitempty"`
+	IntegrationType string            `json:"integration_type,omitempty" toon:"integration_type,omitempty"`
+	Title           string            `json:"title" toon:"title"`
+	Description     string            `json:"description,omitempty" toon:"description,omitempty"`
+	AlertKey        string            `json:"alert_key,omitempty" toon:"alert_key,omitempty"`
+	AlertSeverity   string            `json:"alert_severity" toon:"alert_severity"`
+	AlertStatus     string            `json:"alert_status" toon:"alert_status"`
+	StartTime       int64             `json:"start_time" toon:"start_time"`
+	LastTime        int64             `json:"last_time,omitempty" toon:"last_time,omitempty"`
+	EndTime         int64             `json:"end_time,omitempty" toon:"end_time,omitempty"`
+	EventCnt        int               `json:"event_cnt,omitempty" toon:"event_cnt,omitempty"`
+	EverMuted       bool              `json:"ever_muted,omitempty" toon:"ever_muted,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
+	Incident        *AlertIncident    `json:"incident,omitempty" toon:"incident,omitempty"`
+}
+
+// AlertIncident is the parent incident reference embedded in an alert
+type AlertIncident struct {
+	IncidentID string `json:"incident_id" toon:"incident_id"`
+	Title      string `json:"title,omitempty" toon:"title,omitempty"`
+	Progress   string `json:"progress,omitempty" toon:"progress,omitempty"`
+}

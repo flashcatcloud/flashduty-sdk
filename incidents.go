@@ -788,3 +788,147 @@ func (c *Client) updateCustomField(ctx context.Context, incidentID, fieldName st
 	}
 	return nil
 }
+
+// MergeIncidentsInput contains parameters for merging incidents
+type MergeIncidentsInput struct {
+	SourceIncidentIDs []string // Required: IDs to merge (max 100)
+	TargetIncidentID  string   // Required: destination incident
+}
+
+// MergeIncidents merges source incidents into a target incident
+func (c *Client) MergeIncidents(ctx context.Context, input *MergeIncidentsInput) error {
+	if input == nil {
+		return fmt.Errorf("merge incidents input is required")
+	}
+
+	requestBody := map[string]any{
+		"source_incident_ids": input.SourceIncidentIDs,
+		"target_incident_id":  input.TargetIncidentID,
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/merge", requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to merge incidents: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return handleAPIError(c.logger, resp)
+	}
+
+	var result FlashdutyResponse
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
+}
+
+// SnoozeIncidentsInput contains parameters for snoozing incidents
+type SnoozeIncidentsInput struct {
+	IncidentIDs []string // Required
+	Minutes     int64    // Required: snooze duration in minutes (max 1440)
+}
+
+// SnoozeIncidents snoozes one or more incidents for the specified duration
+func (c *Client) SnoozeIncidents(ctx context.Context, input *SnoozeIncidentsInput) error {
+	if input == nil {
+		return fmt.Errorf("snooze incidents input is required")
+	}
+
+	requestBody := map[string]any{
+		"incident_ids": input.IncidentIDs,
+		"minutes":      input.Minutes,
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/snooze", requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to snooze incidents: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return handleAPIError(c.logger, resp)
+	}
+
+	var result FlashdutyResponse
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
+}
+
+// ReopenIncidents reopens one or more closed incidents
+func (c *Client) ReopenIncidents(ctx context.Context, incidentIDs []string) error {
+	requestBody := map[string]any{
+		"incident_ids": incidentIDs,
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/reopen", requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to reopen incidents: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return handleAPIError(c.logger, resp)
+	}
+
+	var result FlashdutyResponse
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
+}
+
+// ReassignIncidentsInput contains parameters for reassigning incidents
+type ReassignIncidentsInput struct {
+	IncidentIDs []string // Required
+	PersonIDs   []int64  // Required: new responders
+}
+
+// ReassignIncidents reassigns one or more incidents to new responders
+func (c *Client) ReassignIncidents(ctx context.Context, input *ReassignIncidentsInput) error {
+	if input == nil {
+		return fmt.Errorf("reassign incidents input is required")
+	}
+
+	requestBody := map[string]any{
+		"incident_ids": input.IncidentIDs,
+		"assigned_to": map[string]any{
+			"type":       "assign",
+			"person_ids": input.PersonIDs,
+		},
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/assign", requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to reassign incidents: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return handleAPIError(c.logger, resp)
+	}
+
+	var result FlashdutyResponse
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
+}

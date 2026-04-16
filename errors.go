@@ -4,8 +4,8 @@ import "fmt"
 
 // FlashdutyResponse represents the standard Flashduty API response structure
 type FlashdutyResponse struct {
-	Error *DutyError  `json:"error,omitempty"`
-	Data  any `json:"data,omitempty"`
+	Error *DutyError `json:"error,omitempty"`
+	Data  any        `json:"data,omitempty"`
 }
 
 // DutyError represents Flashduty API error

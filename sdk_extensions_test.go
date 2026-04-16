@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -439,6 +442,104 @@ func TestListAlertEventsUsesAlertIDOnly(t *testing.T) {
 
 	if len(out.AlertEvents) != 1 || out.AlertEvents[0].IntegrationType != "prometheus" {
 		t.Fatalf("unexpected alert events: %#v", out.AlertEvents)
+	}
+}
+
+func TestSnoozeIncidentsUsesMinutes(t *testing.T) {
+	client := newSDKExtensionsTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/incident/snooze" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := decodeJSONBody(t, r)
+		if _, ok := body["snooze_before"]; ok {
+			t.Fatalf("unexpected snooze_before in request: %#v", body)
+		}
+		if body["minutes"] != float64(30) {
+			t.Fatalf("minutes = %#v, want 30", body["minutes"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	})
+
+	err := client.SnoozeIncidents(context.Background(), &SnoozeIncidentsInput{
+		IncidentIDs: []string{"507f1f77bcf86cd799439011"},
+		Minutes:     30,
+	})
+	if err != nil {
+		t.Fatalf("SnoozeIncidents error: %v", err)
+	}
+}
+
+func TestListAlertEventsGlobalUsesCommaSeparatedSeverities(t *testing.T) {
+	client := newSDKExtensionsTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alert-event/list" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := decodeJSONBody(t, r)
+		if body["severities"] != "Critical,Warning" {
+			t.Fatalf("severities = %#v, want comma-separated string", body["severities"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"items": []any{},
+				"total": 0,
+			},
+		})
+	})
+
+	out, err := client.ListAlertEventsGlobal(context.Background(), &ListAlertEventsGlobalInput{
+		StartTime:  1713139200,
+		EndTime:    1713744000,
+		Severities: []string{"Critical", "Warning"},
+	})
+	if err != nil {
+		t.Fatalf("ListAlertEventsGlobal error: %v", err)
+	}
+	if out.Total != 0 || len(out.AlertEvents) != 0 {
+		t.Fatalf("unexpected alert event output: %#v", out)
+	}
+}
+
+func TestDeferredAlertCardViewSurfaceIsAbsent(t *testing.T) {
+	clientType := reflect.TypeOf(&Client{})
+	for _, method := range []string{
+		"ListAlertCardViews",
+		"CreateAlertCardView",
+		"DeleteAlertCardView",
+		"ListAlertsByCard",
+	} {
+		if _, ok := clientType.MethodByName(method); ok {
+			t.Fatalf("unexpected deferred method still exposed: %s", method)
+		}
+	}
+
+	fileChecks := map[string][]string{
+		"alerts.go": {
+			"type ListAlertsByCardInput struct",
+			"type ListAlertsByCardOutput struct",
+		},
+		"types.go": {
+			"type AlertCardView struct",
+			"type AlertCardItem struct",
+		},
+	}
+
+	for path, symbols := range fileChecks {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		for _, symbol := range symbols {
+			if strings.Contains(text, symbol) {
+				t.Fatalf("unexpected deferred symbol still present in %s: %s", path, symbol)
+			}
+		}
 	}
 }
 

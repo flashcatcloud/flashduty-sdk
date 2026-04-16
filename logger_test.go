@@ -73,11 +73,11 @@ func TestRecordingLogger(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		call          func(Logger)
-		wantLevel     string
-		wantMsg       string
-		wantKVLen     int
+		name      string
+		call      func(Logger)
+		wantLevel string
+		wantMsg   string
+		wantKVLen int
 	}{
 		{
 			name:      "Debug with kv",
