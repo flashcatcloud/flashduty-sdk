@@ -276,8 +276,12 @@ type Change struct {
 
 // RawTimelineItem represents raw timeline data from API
 type RawTimelineItem struct {
+	RefID     string         `json:"ref_id,omitempty"`
 	Type      string         `json:"type"`
 	CreatedAt int64          `json:"created_at"`
+	UpdatedAt int64          `json:"updated_at,omitempty"`
+	AccountID int64          `json:"account_id,omitempty"`
+	CreatorID int64          `json:"creator_id,omitempty"`
 	PersonID  int64          `json:"person_id,omitempty"`
 	Detail    map[string]any `json:"detail,omitempty"`
 }
@@ -302,9 +306,24 @@ type RawIncident struct {
 
 // RawResponder represents raw responder data from API
 type RawResponder struct {
-	PersonID       int64 `json:"person_id"`
-	AssignedAt     int64 `json:"assigned_at,omitempty"`
-	AcknowledgedAt int64 `json:"acknowledged_at,omitempty"`
+	PersonID       int64  `json:"person_id"`
+	AssignedAt     int64  `json:"assigned_at,omitempty"`
+	AcknowledgedAt int64  `json:"acknowledged_at,omitempty"`
+	PersonName     string `json:"person_name,omitempty"`
+	Email          string `json:"email,omitempty"`
+	As             string `json:"as,omitempty"`
+}
+
+// AssignedTo represents the current assignment target for an incident.
+type AssignedTo struct {
+	PersonIDs        []int64  `json:"person_ids,omitempty" toon:"person_ids,omitempty"`
+	EscalateRuleID   string   `json:"escalate_rule_id,omitempty" toon:"escalate_rule_id,omitempty"`
+	LayerIdx         int      `json:"layer_idx,omitempty" toon:"layer_idx,omitempty"`
+	Type             string   `json:"type,omitempty" toon:"type,omitempty"`
+	Emails           []string `json:"emails,omitempty" toon:"emails,omitempty"`
+	EscalateRuleName string   `json:"escalate_rule_name,omitempty" toon:"escalate_rule_name,omitempty"`
+	AssignedAt       int64    `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
+	ID               string   `json:"id,omitempty" toon:"id,omitempty"`
 }
 
 // MemberListResponse represents the response for member list API
@@ -355,4 +374,167 @@ type TemplateFunction struct {
 	Name        string `json:"name" toon:"name"`
 	Syntax      string `json:"syntax" toon:"syntax"`
 	Description string `json:"description" toon:"description"`
+}
+
+// MetricsBase represents the shared bucket and dimension fields returned by /insight/* APIs.
+type MetricsBase struct {
+	Hours         string `json:"hours,omitempty" toon:"hours,omitempty"`
+	TS            int64  `json:"ts,omitempty" toon:"ts,omitempty"`
+	ChannelID     int64  `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	TeamID        int64  `json:"team_id,omitempty" toon:"team_id,omitempty"`
+	ResponderID   int64  `json:"responder_id,omitempty" toon:"responder_id,omitempty"`
+	AccountID     int64  `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	TeamName      string `json:"team_name,omitempty" toon:"team_name,omitempty"`
+	ChannelName   string `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	ResponderName string `json:"responder_name,omitempty" toon:"responder_name,omitempty"`
+}
+
+// DimensionInsightItem represents pre-aggregated metrics for a team or channel dimension.
+type DimensionInsightItem struct {
+	MetricsBase
+
+	TotalIncidentCnt                int     `json:"total_incident_cnt" toon:"total_incident_cnt"`
+	TotalIncidentsAcknowledged      int     `json:"total_incidents_acknowledged" toon:"total_incidents_acknowledged"`
+	TotalIncidentsClosed            int     `json:"total_incidents_closed" toon:"total_incidents_closed"`
+	TotalIncidentsAutoClosed        int     `json:"total_incidents_auto_closed" toon:"total_incidents_auto_closed"`
+	TotalIncidentsManuallyClosed    int     `json:"total_incidents_manually_closed" toon:"total_incidents_manually_closed"`
+	TotalIncidentsTimeoutClosed     int     `json:"total_incidents_timeout_closed" toon:"total_incidents_timeout_closed"`
+	TotalIncidentsEscalated         int     `json:"total_incidents_escalated" toon:"total_incidents_escalated"`
+	TotalIncidentsManuallyEscalated int     `json:"total_incidents_manually_escalated" toon:"total_incidents_manually_escalated"`
+	TotalIncidentsTimeoutEscalated  int     `json:"total_incidents_timeout_escalated" toon:"total_incidents_timeout_escalated"`
+	TotalIncidentsReassigned        int     `json:"total_incidents_reassigned" toon:"total_incidents_reassigned"`
+	TotalInterruptions              int     `json:"total_interruptions" toon:"total_interruptions"`
+	TotalNotifications              int     `json:"total_notifications" toon:"total_notifications"`
+	TotalEngagedSeconds             int     `json:"total_engaged_seconds" toon:"total_engaged_seconds"`
+	TotalSecondsToAck               int     `json:"total_seconds_to_ack" toon:"total_seconds_to_ack"`
+	TotalSecondsToClose             int     `json:"total_seconds_to_close" toon:"total_seconds_to_close"`
+	MeanSecondsToAck                float64 `json:"mean_seconds_to_ack" toon:"mean_seconds_to_ack"`
+	MeanSecondsToClose              float64 `json:"mean_seconds_to_close" toon:"mean_seconds_to_close"`
+	NoiseReductionPct               float64 `json:"noise_reduction_pct" toon:"noise_reduction_pct"`
+	AcknowledgementPct              float64 `json:"acknowledgement_pct" toon:"acknowledgement_pct"`
+	TotalAlertCnt                   int     `json:"total_alert_cnt" toon:"total_alert_cnt"`
+	TotalAlertEventCnt              int     `json:"total_alert_event_cnt" toon:"total_alert_event_cnt"`
+}
+
+// ResponderInsightItem represents per-responder pre-aggregated metrics.
+type ResponderInsightItem struct {
+	MetricsBase
+
+	Email                           string  `json:"email,omitempty" toon:"email,omitempty"`
+	TotalIncidentCnt                int     `json:"total_incident_cnt" toon:"total_incident_cnt"`
+	TotalIncidentsAcknowledged      int     `json:"total_incidents_acknowledged" toon:"total_incidents_acknowledged"`
+	TotalIncidentsReassigned        int     `json:"total_incidents_reassigned" toon:"total_incidents_reassigned"`
+	TotalIncidentsEscalated         int     `json:"total_incidents_escalated" toon:"total_incidents_escalated"`
+	TotalIncidentsTimeoutEscalated  int     `json:"total_incidents_timeout_escalated" toon:"total_incidents_timeout_escalated"`
+	TotalIncidentsManuallyEscalated int     `json:"total_incidents_manually_escalated" toon:"total_incidents_manually_escalated"`
+	TotalInterruptions              int     `json:"total_interruptions" toon:"total_interruptions"`
+	TotalNotifications              int     `json:"total_notifications" toon:"total_notifications"`
+	TotalEngagedSeconds             int     `json:"total_engaged_seconds" toon:"total_engaged_seconds"`
+	TotalSecondsToAck               int     `json:"total_seconds_to_ack" toon:"total_seconds_to_ack"`
+	MeanSecondsToAck                float64 `json:"mean_seconds_to_ack" toon:"mean_seconds_to_ack"`
+	AcknowledgementPct              float64 `json:"acknowledgement_pct" toon:"acknowledgement_pct"`
+}
+
+// InsightAlertByLabelItem represents a top-K alert source grouped by label
+type InsightAlertByLabelItem struct {
+	Label              string `json:"label" toon:"label"`
+	Hours              string `json:"hours,omitempty" toon:"hours,omitempty"`
+	TotalAlertCnt      int    `json:"total_alert_cnt" toon:"total_alert_cnt"`
+	TotalAlertEventCnt int    `json:"total_alert_event_cnt" toon:"total_alert_event_cnt"`
+}
+
+// InsightIncidentItem represents an incident with attached performance metrics from the insight API
+type InsightIncidentItem struct {
+	IncidentID         string            `json:"incident_id" toon:"incident_id"`
+	Title              string            `json:"title" toon:"title"`
+	Description        string            `json:"description,omitempty" toon:"description,omitempty"`
+	TeamID             int64             `json:"team_id,omitempty" toon:"team_id,omitempty"`
+	TeamName           string            `json:"team_name,omitempty" toon:"team_name,omitempty"`
+	ChannelID          int64             `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	ChannelName        string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	Progress           string            `json:"progress" toon:"progress"`
+	Severity           string            `json:"severity" toon:"severity"`
+	CreatedAt          int64             `json:"created_at" toon:"created_at"`
+	ClosedBy           string            `json:"closed_by,omitempty" toon:"closed_by,omitempty"`
+	SecondsToAck       int               `json:"seconds_to_ack" toon:"seconds_to_ack"`
+	SecondsToClose     int               `json:"seconds_to_close" toon:"seconds_to_close"`
+	EngagedSeconds     int               `json:"engaged_seconds" toon:"engaged_seconds"`
+	Hours              string            `json:"hours,omitempty" toon:"hours,omitempty"`
+	Responders         []RawResponder    `json:"responders,omitempty" toon:"responders,omitempty"`
+	AssignedTo         *AssignedTo       `json:"assigned_to,omitempty" toon:"assigned_to,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
+	Fields             map[string]any    `json:"fields,omitempty" toon:"fields,omitempty"`
+	Notifications      int               `json:"notifications,omitempty" toon:"notifications,omitempty"`
+	Interruptions      int               `json:"interruptions,omitempty" toon:"interruptions,omitempty"`
+	Assignments        int               `json:"assignments,omitempty" toon:"assignments,omitempty"`
+	Reassignments      int               `json:"reassignments,omitempty" toon:"reassignments,omitempty"`
+	Acknowledgements   int               `json:"acknowledgements,omitempty" toon:"acknowledgements,omitempty"`
+	Escalations        int               `json:"escalations,omitempty" toon:"escalations,omitempty"`
+	TimeoutEscalations int               `json:"timeout_escalations,omitempty" toon:"timeout_escalations,omitempty"`
+	ManualEscalations  int               `json:"manual_escalations,omitempty" toon:"manual_escalations,omitempty"`
+	CreatorID          int64             `json:"creator_id,omitempty" toon:"creator_id,omitempty"`
+	CreatorName        string            `json:"creator_name,omitempty" toon:"creator_name,omitempty"`
+}
+
+// IncidentDetail represents full incident data from the /incident/info endpoint
+type IncidentDetail struct {
+	IncidentID    string            `json:"incident_id" toon:"incident_id"`
+	Title         string            `json:"title" toon:"title"`
+	Description   string            `json:"description,omitempty" toon:"description,omitempty"`
+	Severity      string            `json:"incident_severity" toon:"severity"`
+	Progress      string            `json:"progress" toon:"progress"`
+	StartTime     int64             `json:"start_time" toon:"start_time"`
+	AckTime       int64             `json:"ack_time,omitempty" toon:"ack_time,omitempty"`
+	CloseTime     int64             `json:"close_time,omitempty" toon:"close_time,omitempty"`
+	ChannelID     int64             `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	ChannelName   string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	CreatorID     int64             `json:"creator_id,omitempty" toon:"creator_id,omitempty"`
+	CloserID      int64             `json:"closer_id,omitempty" toon:"closer_id,omitempty"`
+	AISummary     string            `json:"ai_summary,omitempty" toon:"ai_summary,omitempty"`
+	RootCause     string            `json:"root_cause,omitempty" toon:"root_cause,omitempty"`
+	Resolution    string            `json:"resolution,omitempty" toon:"resolution,omitempty"`
+	Impact        string            `json:"impact,omitempty" toon:"impact,omitempty"`
+	Frequency     string            `json:"frequency,omitempty" toon:"frequency,omitempty"`
+	AlertCnt      int               `json:"alert_cnt" toon:"alert_cnt"`
+	AlertEventCnt int               `json:"alert_event_cnt" toon:"alert_event_cnt"`
+	PostMortemID  string            `json:"post_mortem_id,omitempty" toon:"post_mortem_id,omitempty"`
+	Responders    []RawResponder    `json:"responders,omitempty" toon:"responders,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
+	Fields        map[string]any    `json:"fields,omitempty" toon:"fields,omitempty"`
+}
+
+// PostMortem represents post-mortem metadata returned by /incident/post-mortem/list.
+type PostMortem struct {
+	AccountID        int64    `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	PostMortemID     string   `json:"post_mortem_id" toon:"post_mortem_id"`
+	TemplateID       string   `json:"template_id,omitempty" toon:"template_id,omitempty"`
+	IncidentIDs      []string `json:"incident_ids,omitempty" toon:"incident_ids,omitempty"`
+	MediaCount       int      `json:"media_count,omitempty" toon:"media_count,omitempty"`
+	AuthorIDs        []int64  `json:"author_ids,omitempty" toon:"author_ids,omitempty"`
+	TeamID           int64    `json:"team_id,omitempty" toon:"team_id,omitempty"`
+	ChannelID        int64    `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	ChannelName      string   `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	IsPrivate        bool     `json:"is_private,omitempty" toon:"is_private,omitempty"`
+	Title            string   `json:"title,omitempty" toon:"title,omitempty"`
+	Status           string   `json:"status,omitempty" toon:"status,omitempty"`
+	CreatedAtSeconds int64    `json:"created_at_seconds,omitempty" toon:"created_at_seconds,omitempty"`
+	UpdatedAtSeconds int64    `json:"updated_at_seconds,omitempty" toon:"updated_at_seconds,omitempty"`
+}
+
+// AlertEvent represents a raw alert event
+type AlertEvent struct {
+	EventID         string            `json:"event_id" toon:"event_id"`
+	AlertID         string            `json:"alert_id,omitempty" toon:"alert_id,omitempty"`
+	AccountID       int64             `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	ChannelID       int64             `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	IntegrationID   int64             `json:"integration_id,omitempty" toon:"integration_id,omitempty"`
+	IntegrationType string            `json:"integration_type,omitempty" toon:"integration_type,omitempty"`
+	Title           string            `json:"title,omitempty" toon:"title,omitempty"`
+	Description     string            `json:"description,omitempty" toon:"description,omitempty"`
+	EventSeverity   string            `json:"event_severity" toon:"event_severity"`
+	EventStatus     string            `json:"event_status" toon:"event_status"`
+	EventTime       int64             `json:"event_time" toon:"event_time"`
+	Labels          map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
+	CreatedAt       int64             `json:"created_at,omitempty" toon:"created_at,omitempty"`
+	UpdatedAt       int64             `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
 }

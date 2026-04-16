@@ -517,6 +517,250 @@ func (c *Client) updateIncidentField(ctx context.Context, incidentID, endpoint, 
 	return nil
 }
 
+// GetIncidentDetailInput contains parameters for getting incident detail
+type GetIncidentDetailInput struct {
+	IncidentID string // Required
+}
+
+// GetIncidentDetailOutput contains full incident detail
+type GetIncidentDetailOutput struct {
+	Incident IncidentDetail `json:"incident"`
+}
+
+// GetIncidentDetail fetches detailed information for a single incident
+func (c *Client) GetIncidentDetail(ctx context.Context, input *GetIncidentDetailInput) (*GetIncidentDetailOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("incident detail input is required")
+	}
+
+	requestBody := map[string]any{
+		"incident_id": input.IncidentID,
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/info", requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get incident detail: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, handleAPIError(c.logger, resp)
+	}
+
+	var result struct {
+		Error *DutyError      `json:"error,omitempty"`
+		Data  *IncidentDetail `json:"data,omitempty"`
+	}
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result.Data == nil {
+		return nil, fmt.Errorf("incident not found: %s", input.IncidentID)
+	}
+
+	return &GetIncidentDetailOutput{Incident: *result.Data}, nil
+}
+
+// GetIncidentFeedInput contains parameters for getting incident feed/timeline
+type GetIncidentFeedInput struct {
+	IncidentID string // Required
+	Limit      int    // Max results (default 20)
+	Page       int    // Page number (default 1)
+	Asc        bool   // Sort ascending by time (default false)
+}
+
+// GetIncidentFeedOutput contains incident feed events
+type GetIncidentFeedOutput struct {
+	Items       []TimelineEvent `json:"items"`
+	HasNextPage bool            `json:"has_next_page"`
+}
+
+// GetIncidentFeed fetches the feed/timeline for an incident with enriched person names
+func (c *Client) GetIncidentFeed(ctx context.Context, input *GetIncidentFeedInput) (*GetIncidentFeedOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("incident feed input is required")
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
+
+	requestBody := map[string]any{
+		"incident_id": input.IncidentID,
+		"limit":       limit,
+		"p":           page,
+		"asc":         input.Asc,
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/feed", requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get incident feed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, handleAPIError(c.logger, resp)
+	}
+
+	var result struct {
+		Error *DutyError `json:"error,omitempty"`
+		Data  *struct {
+			Items       []RawTimelineItem `json:"items"`
+			HasNextPage bool              `json:"has_next_page"`
+		} `json:"data,omitempty"`
+	}
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result.Data == nil || len(result.Data.Items) == 0 {
+		return &GetIncidentFeedOutput{
+			Items:       []TimelineEvent{},
+			HasNextPage: false,
+		}, nil
+	}
+
+	// Enrich with person names
+	personIDs := collectTimelinePersonIDs(result.Data.Items)
+	personMap, err := c.fetchPersonInfos(ctx, personIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load person details for feed: %w", err)
+	}
+
+	enrichedItems := enrichTimelineItems(result.Data.Items, personMap)
+
+	return &GetIncidentFeedOutput{
+		Items:       enrichedItems,
+		HasNextPage: result.Data.HasNextPage,
+	}, nil
+}
+
+// ListPostMortemsInput contains parameters for listing post-mortem reports
+type ListPostMortemsInput struct {
+	// Deprecated: /incident/post-mortem/list does not support incident_id filtering.
+	IncidentID string
+
+	Status                string  // drafting or published
+	TeamIDs               []int64 // Optional team filter
+	ChannelIDs            []int64 // Optional channel filter
+	CreatedAtStartSeconds int64   // Optional creation time lower bound
+	CreatedAtEndSeconds   int64   // Optional creation time upper bound
+	OrderBy               string  // created_at_seconds or updated_at_seconds
+	Asc                   bool    // Sort ascending when true
+	Limit                 int     // Max results (default 20)
+	Page                  int     // Page number (default 1)
+	SearchAfterCtx        string  // Cursor for the next page
+}
+
+// ListPostMortemsOutput contains post-mortem reports
+type ListPostMortemsOutput struct {
+	PostMortems    []PostMortem `json:"post_mortems"`
+	Total          int          `json:"total"`
+	HasNextPage    bool         `json:"has_next_page"`
+	SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
+}
+
+// ListPostMortems queries post-mortem reports
+func (c *Client) ListPostMortems(ctx context.Context, input *ListPostMortemsInput) (*ListPostMortemsOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("post-mortem query input is required")
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
+
+	requestBody := map[string]any{
+		"limit": limit,
+		"p":     page,
+	}
+	if input.Status != "" {
+		requestBody["status"] = input.Status
+	}
+	if len(input.TeamIDs) > 0 {
+		requestBody["team_ids"] = input.TeamIDs
+	}
+	if len(input.ChannelIDs) > 0 {
+		requestBody["channel_ids"] = input.ChannelIDs
+	}
+	if input.CreatedAtStartSeconds > 0 {
+		requestBody["created_at_start_seconds"] = input.CreatedAtStartSeconds
+	}
+	if input.CreatedAtEndSeconds > 0 {
+		requestBody["created_at_end_seconds"] = input.CreatedAtEndSeconds
+	}
+	if input.OrderBy != "" {
+		requestBody["order_by"] = input.OrderBy
+	}
+	if input.Asc {
+		requestBody["asc"] = true
+	}
+	if input.SearchAfterCtx != "" {
+		requestBody["search_after_ctx"] = input.SearchAfterCtx
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/incident/post-mortem/list", requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list post-mortems: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, handleAPIError(c.logger, resp)
+	}
+
+	var result struct {
+		Error *DutyError `json:"error,omitempty"`
+		Data  *struct {
+			Items          []PostMortem `json:"items"`
+			Total          int          `json:"total"`
+			HasNextPage    bool         `json:"has_next_page"`
+			SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
+		} `json:"data,omitempty"`
+	}
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	postMortems := []PostMortem{}
+	total := 0
+	hasNextPage := false
+	searchAfterCtx := ""
+	if result.Data != nil {
+		postMortems = result.Data.Items
+		total = result.Data.Total
+		hasNextPage = result.Data.HasNextPage
+		searchAfterCtx = result.Data.SearchAfterCtx
+	}
+
+	return &ListPostMortemsOutput{
+		PostMortems:    postMortems,
+		Total:          total,
+		HasNextPage:    hasNextPage,
+		SearchAfterCtx: searchAfterCtx,
+	}, nil
+}
+
 // updateCustomField is a helper to update a custom field
 func (c *Client) updateCustomField(ctx context.Context, incidentID, fieldName string, fieldValue any) error {
 	requestBody := map[string]any{
