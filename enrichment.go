@@ -525,8 +525,8 @@ func collectTimelinePersonIDs(items []RawTimelineItem) []int64 {
 	personIDs := make([]int64, 0)
 
 	for _, item := range items {
-		if item.PersonID != 0 {
-			personIDs = append(personIDs, item.PersonID)
+		if actorID := timelineActorID(item); actorID != 0 {
+			personIDs = append(personIDs, actorID)
 		}
 
 		if item.Detail == nil {
@@ -539,6 +539,7 @@ func collectTimelinePersonIDs(items []RawTimelineItem) []int64 {
 			personIDs = extractPersonIDsFromDetail(item.Detail, "person_ids", personIDs)
 		case "i_notify":
 			personIDs = extractPersonIDsFromDetail(item.Detail, "to", personIDs)
+			personIDs = extractPersonIDsFromNestedDetail(item.Detail, "persons", "person_id", personIDs)
 		}
 	}
 
@@ -552,6 +553,25 @@ func extractPersonIDsFromDetail(detail map[string]any, field string, personIDs [
 			if id, ok := toInt64(v); ok && id != 0 {
 				personIDs = append(personIDs, id)
 			}
+		}
+	}
+	return personIDs
+}
+
+// extractPersonIDsFromNestedDetail extracts person IDs from an array of objects.
+func extractPersonIDsFromNestedDetail(detail map[string]any, field, idField string, personIDs []int64) []int64 {
+	values, ok := detail[field].([]any)
+	if !ok {
+		return personIDs
+	}
+
+	for _, v := range values {
+		entry, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if id, ok := toInt64(entry[idField]); ok && id != 0 {
+			personIDs = append(personIDs, id)
 		}
 	}
 	return personIDs
@@ -575,13 +595,14 @@ func enrichTimelineItems(items []RawTimelineItem, personMap map[int64]PersonInfo
 	events := make([]TimelineEvent, 0, len(items))
 
 	for _, item := range items {
+		operatorID := timelineActorID(item)
 		event := TimelineEvent{
 			Type:       item.Type,
 			Timestamp:  item.CreatedAt,
-			OperatorID: item.PersonID,
+			OperatorID: operatorID,
 		}
 
-		if p, ok := personMap[item.PersonID]; ok {
+		if p, ok := personMap[operatorID]; ok {
 			event.OperatorName = p.PersonName
 		}
 
@@ -604,6 +625,7 @@ func enrichTimelineDetail(eventType string, detail map[string]any, personMap map
 	switch eventType {
 	case "i_notify":
 		enrichPersonIDsField(enriched, "to", personMap)
+		enrichNestedPersonField(enriched, "persons", personMap)
 	case "i_assign", "i_a_rspd":
 		enrichPersonIDsField(enriched, "to", personMap)
 		enrichPersonIDsField(enriched, "person_ids", personMap)
@@ -642,4 +664,32 @@ func enrichPersonIDsField(enriched map[string]any, field string, personMap map[i
 		enrichedValues = append(enrichedValues, entry)
 	}
 	enriched[field] = enrichedValues
+}
+
+func enrichNestedPersonField(enriched map[string]any, field string, personMap map[int64]PersonInfo) {
+	values, ok := enriched[field].([]any)
+	if !ok {
+		return
+	}
+
+	for _, v := range values {
+		entry, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, ok := toInt64(entry["person_id"])
+		if !ok {
+			continue
+		}
+		if p, ok := personMap[id]; ok {
+			entry["person_name"] = p.PersonName
+		}
+	}
+}
+
+func timelineActorID(item RawTimelineItem) int64 {
+	if item.CreatorID != 0 {
+		return item.CreatorID
+	}
+	return item.PersonID
 }
