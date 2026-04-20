@@ -3,8 +3,10 @@ package flashduty
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -525,4 +527,338 @@ func TestClientHookOverridesStaticHeaders(t *testing.T) {
 	if v := got.Get("X-Overlap"); v != "hook-value" {
 		t.Errorf("X-Overlap = %q; want %q (hook should override static header)", v, "hook-value")
 	}
+}
+
+func TestSanitizeBodyRedactsSensitiveKeys(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		mustNotAppear []string
+		mustAppear    []string
+	}{
+		{
+			name:          "api_key",
+			input:         `{"api_key":"secret-123","source_page_id":"p1"}`,
+			mustNotAppear: []string{"secret-123"},
+			mustAppear:    []string{"[REDACTED]", "p1"},
+		},
+		{
+			name:          "password",
+			input:         `{"password":"hunter2","user":"ada"}`,
+			mustNotAppear: []string{"hunter2"},
+			mustAppear:    []string{"[REDACTED]", "ada"},
+		},
+		{
+			name:          "token",
+			input:         `{"token":"abcd","other":"x"}`,
+			mustNotAppear: []string{"abcd"},
+			mustAppear:    []string{"[REDACTED]", "x"},
+		},
+		{
+			name:          "secret",
+			input:         `{"secret":"sshh","x":1}`,
+			mustNotAppear: []string{"sshh"},
+			mustAppear:    []string{"[REDACTED]"},
+		},
+		{
+			name:       "no_sensitive_keys_preserved",
+			input:      `{"page_id":42,"title":"hi"}`,
+			mustAppear: []string{"page_id", "42", "hi"},
+		},
+		{
+			name:       "empty_input_passthrough",
+			input:      "",
+			mustAppear: nil,
+		},
+		{
+			name:       "non_json_passthrough",
+			input:      "raw=not-json",
+			mustAppear: []string{"raw=not-json"},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeBody(tc.input)
+			for _, s := range tc.mustNotAppear {
+				if strings.Contains(got, s) {
+					t.Errorf("sanitizeBody(%q) = %q; must not contain %q", tc.input, got, s)
+				}
+			}
+			for _, s := range tc.mustAppear {
+				if !strings.Contains(got, s) {
+					t.Errorf("sanitizeBody(%q) = %q; want to contain %q", tc.input, got, s)
+				}
+			}
+		})
+	}
+}
+
+func TestSanitizeBodyRedactsNestedCaseInsensitiveAliases(t *testing.T) {
+	input := `{"outer":{"ApiKey":"secret-123","nested":[{"ACCESS_TOKEN":"token-abc"},{"safe":"ok"}],"credentials":{"clientSecret":"super-secret"}},"Authorization":"Bearer top-secret","page_id":"p1"}`
+
+	got := sanitizeBody(input)
+
+	for _, secret := range []string{"secret-123", "token-abc", "super-secret", "Bearer top-secret"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("sanitizeBody(%q) = %q; must not contain %q", input, got, secret)
+		}
+	}
+
+	for _, want := range []string{"[REDACTED]", `"safe":"ok"`, `"page_id":"p1"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("sanitizeBody(%q) = %q; want to contain %q", input, got, want)
+		}
+	}
+}
+
+func TestMakeRequestLogsRedactedBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"job_id": "j1"}})
+	}))
+	t.Cleanup(ts.Close)
+
+	logger := &capturingLogger{}
+	client, err := NewClient("app-key", WithBaseURL(ts.URL), WithLogger(logger))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = client.StartStatusPageMigration(context.Background(), &StartStatusPageMigrationInput{
+		SourceAPIKey: "atlassian-secret",
+		SourcePageID: "page_123",
+	})
+	if err != nil {
+		t.Fatalf("StartStatusPageMigration: %v", err)
+	}
+
+	entries := logger.snapshot()
+	req, ok := findLogEntry(entries, "duty request")
+	if !ok {
+		t.Fatalf("expected a 'duty request' log entry; got %d entries", len(entries))
+	}
+
+	body := logKVString(req.kv, "body")
+	if body == "" {
+		t.Fatalf("body field missing from log entry")
+	}
+	if strings.Contains(body, "atlassian-secret") {
+		t.Errorf("request log leaked api_key: body = %q", body)
+	}
+	if !strings.Contains(body, "[REDACTED]") {
+		t.Errorf("request log missing redaction marker: body = %q", body)
+	}
+}
+
+func TestParseResponseLogsRedactedBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"job_id": "j1",
+				"echo": map[string]any{
+					"ApiKey": "response-secret",
+					"nested": []any{
+						map[string]any{"AUTHORIZATION": "Bearer response-token"},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(ts.Close)
+
+	logger := &capturingLogger{}
+	client, err := NewClient("app-key", WithBaseURL(ts.URL), WithLogger(logger))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = client.StartStatusPageMigration(context.Background(), &StartStatusPageMigrationInput{
+		SourceAPIKey: "request-secret",
+		SourcePageID: "page_123",
+	})
+	if err != nil {
+		t.Fatalf("StartStatusPageMigration: %v", err)
+	}
+
+	entries := logger.snapshot()
+	resp, ok := findLogEntry(entries, "duty response")
+	if !ok {
+		t.Fatalf("expected a 'duty response' log entry; got %d entries", len(entries))
+	}
+
+	body := logKVString(resp.kv, "body")
+	if body == "" {
+		t.Fatalf("body field missing from log entry")
+	}
+	for _, secret := range []string{"response-secret", "Bearer response-token"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("response log leaked secret %q: body = %q", secret, body)
+		}
+	}
+	if !strings.Contains(body, "[REDACTED]") {
+		t.Errorf("response log missing redaction marker: body = %q", body)
+	}
+}
+
+func TestHandleAPIErrorLogsRedactedBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message": "invalid credentials",
+				"details": map[string]any{
+					"clientSecret": "response-secret",
+					"nested": []any{
+						map[string]any{"ACCESS_TOKEN": "response-token"},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(ts.Close)
+
+	logger := &capturingLogger{}
+	client, err := NewClient("app-key", WithBaseURL(ts.URL), WithLogger(logger))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = client.StartStatusPageMigration(context.Background(), &StartStatusPageMigrationInput{
+		SourceAPIKey: "request-secret",
+		SourcePageID: "page_123",
+	})
+	if err == nil {
+		t.Fatal("expected StartStatusPageMigration to fail, got nil")
+	}
+
+	entries := logger.snapshot()
+	resp, ok := findLogEntry(entries, "duty error")
+	if !ok {
+		t.Fatalf("expected a 'duty error' log entry; got %d entries", len(entries))
+	}
+
+	body := logKVString(resp.kv, "body")
+	if body == "" {
+		t.Fatalf("body field missing from log entry")
+	}
+	for _, secret := range []string{"response-secret", "response-token"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("error log leaked secret %q: body = %q", secret, body)
+		}
+	}
+	if !strings.Contains(body, "[REDACTED]") {
+		t.Errorf("error log missing redaction marker: body = %q", body)
+	}
+}
+
+func TestParseResponseReturnsSanitizedErrorBody(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Header:     http.Header{"Flashcat-Request-Id": []string{"req-1"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"error":{"message":"upstream failed","details":{"ApiKey":"response-secret","nested":[{"ACCESS_TOKEN":"response-token"}]}}}`,
+		)),
+		Request: &http.Request{Header: make(http.Header)},
+	}
+
+	err := parseResponse(&capturingLogger{}, resp, nil)
+	if err == nil {
+		t.Fatal("expected parseResponse to fail, got nil")
+	}
+	if !strings.HasPrefix(err.Error(), "API server error (HTTP 502, request_id: req-1): ") {
+		t.Fatalf("parseResponse returned unexpected error format: %v", err)
+	}
+	if strings.Contains(err.Error(), "response-secret") || strings.Contains(err.Error(), "response-token") {
+		t.Fatalf("parseResponse leaked secret in error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("parseResponse error missing redaction marker: %v", err)
+	}
+}
+
+func TestHandleAPIErrorReturnsSanitizedErrorBody(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusForbidden,
+		Header:     http.Header{"Flashcat-Request-Id": []string{"req-2"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"error":{"message":"invalid credentials","details":{"clientSecret":"response-secret","nested":[{"AUTHORIZATION":"Bearer response-token"}]}}}`,
+		)),
+		Request: &http.Request{Header: make(http.Header)},
+	}
+
+	err := handleAPIError(&capturingLogger{}, resp)
+	if err == nil {
+		t.Fatal("expected handleAPIError to fail, got nil")
+	}
+	if !strings.HasPrefix(err.Error(), "API client error (HTTP 403, request_id: req-2): ") {
+		t.Fatalf("handleAPIError returned unexpected error format: %v", err)
+	}
+	if strings.Contains(err.Error(), "response-secret") || strings.Contains(err.Error(), "response-token") {
+		t.Fatalf("handleAPIError leaked secret in error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("handleAPIError error missing redaction marker: %v", err)
+	}
+}
+
+func TestReturnedAPIErrorsPreserveNonJSONBody(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*http.Response) error
+		want string
+	}{
+		{
+			name: "parseResponse",
+			call: func(resp *http.Response) error {
+				return parseResponse(&capturingLogger{}, resp, nil)
+			},
+			want: "API client error (HTTP 400, request_id: req-plain-parse): upstream returned plaintext secret=response-secret",
+		},
+		{
+			name: "handleAPIError",
+			call: func(resp *http.Response) error {
+				return handleAPIError(&capturingLogger{}, resp)
+			},
+			want: "API client error (HTTP 400, request_id: req-plain-handle): upstream returned plaintext secret=response-secret",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := &http.Response{
+				StatusCode: http.StatusBadRequest,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("upstream returned plaintext secret=response-secret")),
+				Request:    &http.Request{Header: make(http.Header)},
+			}
+			if tc.name == "parseResponse" {
+				resp.Header.Set("Flashcat-Request-Id", "req-plain-parse")
+			} else {
+				resp.Header.Set("Flashcat-Request-Id", "req-plain-handle")
+			}
+
+			err := tc.call(resp)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if got := err.Error(); got != tc.want {
+				t.Fatalf("error = %q; want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func logKVString(kv []any, key string) string {
+	for i := 0; i+1 < len(kv); i += 2 {
+		if k, ok := kv[i].(string); ok && k == key {
+			if v, ok := kv[i+1].(string); ok {
+				return v
+			}
+		}
+	}
+	return ""
 }

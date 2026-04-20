@@ -85,7 +85,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body any)
 	}
 
 	logAttrs := traceLogAttrsFromRequest(req)
-	logAttrs = append(logAttrs, "method", method, "url", sanitizeURL(fullURL), "body", truncateBody(string(reqBodyBytes)))
+	logAttrs = append(logAttrs, "method", method, "url", sanitizeURL(fullURL), "body", truncateBody(sanitizeBody(string(reqBodyBytes))))
 	c.logger.Info("duty request", logAttrs...)
 
 	resp, err := c.httpClient.Do(req)
@@ -111,6 +111,106 @@ func sanitizeURL(u *url.URL) string {
 		sanitized.RawQuery = q.Encode()
 	}
 	return sanitized.String()
+}
+
+// sensitiveBodyKeys enumerates normalized JSON keys whose values must be
+// redacted before bodies are logged. The set intentionally covers common
+// credential aliases seen in API payloads and echoed error responses.
+var sensitiveBodyKeys = map[string]struct{}{
+	"apikey":        {},
+	"xapikey":       {},
+	"accesskey":     {},
+	"password":      {},
+	"passwd":        {},
+	"pwd":           {},
+	"token":         {},
+	"accesstoken":   {},
+	"refreshtoken":  {},
+	"idtoken":       {},
+	"sessiontoken":  {},
+	"authtoken":     {},
+	"oauthtoken":    {},
+	"bearertoken":   {},
+	"authorization": {},
+	"auth":          {},
+	"secret":        {},
+	"clientsecret":  {},
+	"secretkey":     {},
+	"privatekey":    {},
+	"signingkey":    {},
+	"credential":    {},
+	"credentials":   {},
+}
+
+// sanitizeBody redacts values of well-known sensitive JSON keys so that
+// secrets do not appear in request/response logs. It is best-effort: empty or
+// non-JSON bodies pass through unchanged. Callers must still use sanitizeURL
+// for URL-borne secrets.
+func sanitizeBody(body string) string {
+	if body == "" {
+		return body
+	}
+	var v any
+	if err := json.Unmarshal([]byte(body), &v); err != nil {
+		return body
+	}
+
+	sanitized, redacted := sanitizeJSONValue(v)
+	if !redacted {
+		return body
+	}
+	out, err := json.Marshal(sanitized)
+	if err != nil {
+		return body
+	}
+	return string(out)
+}
+
+func sanitizeJSONValue(v any) (any, bool) {
+	switch value := v.(type) {
+	case map[string]any:
+		sanitized := make(map[string]any, len(value))
+		redacted := false
+		for key, item := range value {
+			if isSensitiveBodyKey(key) {
+				sanitized[key] = "[REDACTED]"
+				redacted = true
+				continue
+			}
+
+			sanitizedItem, itemRedacted := sanitizeJSONValue(item)
+			sanitized[key] = sanitizedItem
+			redacted = redacted || itemRedacted
+		}
+		return sanitized, redacted
+	case []any:
+		sanitized := make([]any, len(value))
+		redacted := false
+		for i, item := range value {
+			sanitizedItem, itemRedacted := sanitizeJSONValue(item)
+			sanitized[i] = sanitizedItem
+			redacted = redacted || itemRedacted
+		}
+		return sanitized, redacted
+	default:
+		return v, false
+	}
+}
+
+func isSensitiveBodyKey(key string) bool {
+	_, ok := sensitiveBodyKeys[normalizeSensitiveBodyKey(key)]
+	return ok
+}
+
+func normalizeSensitiveBodyKey(key string) string {
+	var b strings.Builder
+	b.Grow(len(key))
+	for _, r := range strings.ToLower(strings.TrimSpace(key)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // sanitizeError removes potential URL with sensitive data from error messages
@@ -166,23 +266,24 @@ func parseResponse(logger Logger, resp *http.Response, v any) error {
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
+	sanitizedBody := sanitizeBody(string(body))
 
 	logAttrs := traceLogAttrsFromRequest(resp.Request)
 	logAttrs = append(logAttrs,
 		"status", resp.StatusCode,
-		"body", truncateBody(string(body)),
+		"body", truncateBody(sanitizedBody),
 	)
 
 	requestID := resp.Header.Get("Flashcat-Request-Id")
 
 	if resp.StatusCode >= 500 {
 		logger.Error("duty response", logAttrs...)
-		return fmt.Errorf("API server error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, string(body))
+		return fmt.Errorf("API server error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, sanitizedBody)
 	}
 
 	if resp.StatusCode >= 400 {
 		logger.Warn("duty response", logAttrs...)
-		return fmt.Errorf("API client error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, string(body))
+		return fmt.Errorf("API client error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, sanitizedBody)
 	}
 
 	logger.Info("duty response", logAttrs...)
@@ -203,22 +304,23 @@ func handleAPIError(logger Logger, resp *http.Response) error {
 	if err != nil {
 		return fmt.Errorf("API request failed (HTTP %d): unable to read response body: %v", resp.StatusCode, err)
 	}
+	sanitizedBody := sanitizeBody(string(body))
 
 	logAttrs := traceLogAttrsFromRequest(resp.Request)
 	logAttrs = append(logAttrs,
 		"status", resp.StatusCode,
-		"body", truncateBody(string(body)),
+		"body", truncateBody(sanitizedBody),
 	)
 
 	requestID := resp.Header.Get("Flashcat-Request-Id")
 
 	if resp.StatusCode >= 500 {
 		logger.Error("duty error", logAttrs...)
-		return fmt.Errorf("API server error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, string(body))
+		return fmt.Errorf("API server error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, sanitizedBody)
 	}
 
 	logger.Warn("duty error", logAttrs...)
-	return fmt.Errorf("API client error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, string(body))
+	return fmt.Errorf("API client error (HTTP %d, request_id: %s): %s", resp.StatusCode, requestID, sanitizedBody)
 }
 
 // truncateBody truncates a string body if it exceeds the default max size for logging
