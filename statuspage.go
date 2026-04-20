@@ -3,6 +3,7 @@ package flashduty
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -262,6 +263,182 @@ func (c *Client) CreateChangeTimeline(ctx context.Context, input *CreateChangeTi
 		return fmt.Errorf("failed to create timeline: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	var result FlashdutyResponse
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+
+	return nil
+}
+
+// StartStatusPageMigrationInput contains parameters for starting a status page
+// structure and history migration from an external provider.
+type StartStatusPageMigrationInput struct {
+	SourceAPIKey string // Required. API key for the source provider (e.g. Atlassian Statuspage)
+	SourcePageID string // Required. Page identifier in the source provider
+}
+
+// StartStatusPageEmailSubscriberMigrationInput contains parameters for starting
+// an email subscriber migration from an external provider into an existing
+// Flashduty status page.
+type StartStatusPageEmailSubscriberMigrationInput struct {
+	SourceAPIKey string // Required. API key for the source provider
+	SourcePageID string // Required. Page identifier in the source provider
+	TargetPageID int64  // Required. Flashduty status page ID to import into
+}
+
+// StartStatusPageMigrationOutput contains the result of starting an async
+// status page migration. Both structure and email subscriber migrations return
+// a job ID that can be polled with GetStatusPageMigrationStatus.
+type StartStatusPageMigrationOutput struct {
+	JobID string `json:"job_id"`
+}
+
+// StatusPageMigrationProgress describes incremental counters reported by a
+// migration job. Fields are populated best-effort; zero values indicate
+// either the counter does not apply to the current phase or no items of that
+// kind have been processed yet.
+type StatusPageMigrationProgress struct {
+	TotalSteps           int      `json:"total_steps"`
+	CompletedSteps       int      `json:"completed_steps"`
+	ComponentsImported   int      `json:"components_imported"`
+	SectionsImported     int      `json:"sections_imported"`
+	IncidentsImported    int      `json:"incidents_imported"`
+	MaintenancesImported int      `json:"maintenances_imported"`
+	SubscribersImported  int      `json:"subscribers_imported"`
+	SubscribersSkipped   int      `json:"subscribers_skipped"`
+	TemplatesImported    int      `json:"templates_imported"`
+	Warnings             []string `json:"warnings,omitempty"`
+}
+
+// StatusPageMigrationJob describes the state of a status page migration job.
+type StatusPageMigrationJob struct {
+	JobID        string                      `json:"job_id"`
+	SourcePageID string                      `json:"source_page_id"`
+	TargetPageID int64                       `json:"target_page_id"`
+	Phase        string                      `json:"phase"`
+	Status       string                      `json:"status"`
+	Progress     StatusPageMigrationProgress `json:"progress"`
+	Error        string                      `json:"error,omitempty"`
+	CreatedAt    int64                       `json:"created_at"`
+	UpdatedAt    int64                       `json:"updated_at"`
+}
+
+// StartStatusPageMigration starts an asynchronous migration of status page
+// structure and history from an external provider into Flashduty. The returned
+// job ID can be polled with GetStatusPageMigrationStatus and cancelled with
+// CancelStatusPageMigration.
+func (c *Client) StartStatusPageMigration(ctx context.Context, input *StartStatusPageMigrationInput) (*StartStatusPageMigrationOutput, error) {
+	if input == nil {
+		return nil, errors.New("input is required")
+	}
+	return c.startStatusPageMigration(ctx, "/status-page/migrate-structure", map[string]any{
+		"api_key":        input.SourceAPIKey,
+		"source_page_id": input.SourcePageID,
+	})
+}
+
+// StartStatusPageEmailSubscriberMigration starts an asynchronous migration of
+// email subscribers from an external provider into an existing Flashduty
+// status page. The returned job ID can be polled with
+// GetStatusPageMigrationStatus and cancelled with CancelStatusPageMigration.
+func (c *Client) StartStatusPageEmailSubscriberMigration(ctx context.Context, input *StartStatusPageEmailSubscriberMigrationInput) (*StartStatusPageMigrationOutput, error) {
+	if input == nil {
+		return nil, errors.New("input is required")
+	}
+	return c.startStatusPageMigration(ctx, "/status-page/migrate-email-subscribers", map[string]any{
+		"api_key":        input.SourceAPIKey,
+		"source_page_id": input.SourcePageID,
+		"target_page_id": input.TargetPageID,
+	})
+}
+
+func (c *Client) startStatusPageMigration(ctx context.Context, path string, body map[string]any) (*StartStatusPageMigrationOutput, error) {
+	resp, err := c.makeRequest(ctx, "POST", path, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start status page migration: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, handleAPIError(c.logger, resp)
+	}
+
+	var result struct {
+		Error *DutyError                      `json:"error,omitempty"`
+		Data  *StartStatusPageMigrationOutput `json:"data,omitempty"`
+	}
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.Data == nil {
+		return nil, errors.New("status page migration response missing data")
+	}
+
+	return result.Data, nil
+}
+
+// GetStatusPageMigrationStatus fetches the current state of a status page
+// migration job identified by jobID.
+func (c *Client) GetStatusPageMigrationStatus(ctx context.Context, jobID string) (*StatusPageMigrationJob, error) {
+	if jobID == "" {
+		return nil, errors.New("jobID is required")
+	}
+
+	params := url.Values{}
+	params.Set("job_id", jobID)
+	resp, err := c.makeRequest(ctx, "GET", "/status-page/migration/status?"+params.Encode(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status page migration status: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, handleAPIError(c.logger, resp)
+	}
+
+	var result struct {
+		Error *DutyError              `json:"error,omitempty"`
+		Data  *StatusPageMigrationJob `json:"data,omitempty"`
+	}
+	if err := parseResponse(c.logger, resp, &result); err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.Data == nil {
+		return nil, fmt.Errorf("status page migration status response missing data")
+	}
+
+	return result.Data, nil
+}
+
+// CancelStatusPageMigration requests cancellation of an in-flight status page
+// migration job identified by jobID.
+func (c *Client) CancelStatusPageMigration(ctx context.Context, jobID string) error {
+	if jobID == "" {
+		return errors.New("jobID is required")
+	}
+
+	resp, err := c.makeRequest(ctx, "POST", "/status-page/migration/cancel", map[string]any{
+		"job_id": jobID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to cancel status page migration: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return handleAPIError(c.logger, resp)
+	}
 
 	var result FlashdutyResponse
 	if err := parseResponse(c.logger, resp, &result); err != nil {
