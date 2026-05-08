@@ -12,16 +12,21 @@ const defaultQueryLimit = 20
 
 // ListIncidentsInput contains parameters for listing incidents
 type ListIncidentsInput struct {
-	IncidentIDs   []string // Direct lookup by IDs (if set, other filters are ignored)
-	Progress      string   // Filter: Triggered, Processing, Closed (comma-separated for multiple)
-	Severity      string   // Filter: Info, Warning, Critical
-	ChannelID     int64    // Filter by collaboration space ID
-	StartTime     int64    // Unix timestamp (seconds), required if no IncidentIDs
-	EndTime       int64    // Unix timestamp (seconds), required if no IncidentIDs
-	Title         string   // Keyword search in incident title
-	Limit         int      // Max results (default 20, max 100)
-	Page          int      // Page number (default 1)
-	IncludeAlerts bool     // Whether to include alerts preview (default true)
+	IncidentIDs []string // Direct lookup by IDs (if set, other filters are ignored)
+	Progress    string   // Filter: Triggered, Processing, Closed (comma-separated for multiple)
+	Severity    string   // Filter: Info, Warning, Critical
+	ChannelIDs  []int64  // Filter by collaboration space IDs
+	// Deprecated: use ChannelIDs. If both are set, ChannelIDs wins; otherwise
+	// a non-zero ChannelID is wrapped into a single-element ChannelIDs slice.
+	// The backend /incident/list endpoint expects channel_ids (array) — singular
+	// channel_id is silently ignored.
+	ChannelID     int64
+	StartTime     int64 // Unix timestamp (seconds), required if no IncidentIDs
+	EndTime       int64 // Unix timestamp (seconds), required if no IncidentIDs
+	Title         string
+	Limit         int
+	Page          int
+	IncludeAlerts bool
 }
 
 // ListIncidentsOutput contains the result of listing incidents
@@ -50,7 +55,7 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 		if page <= 0 {
 			page = 1
 		}
-		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, input.ChannelID, input.StartTime, input.EndTime, input.Title, limit, page)
+		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, mergeChannelIDs(input.ChannelIDs, input.ChannelID), input.StartTime, input.EndTime, input.Title, limit, page)
 	}
 
 	if err != nil {
@@ -441,7 +446,7 @@ func (c *Client) fetchIncidentsByIDs(ctx context.Context, incidentIDs []string) 
 }
 
 // fetchIncidentsByFilters fetches incidents by filters
-func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelID, startTime, endTime int64, title string, limit, page int) ([]RawIncident, error) {
+func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelIDs []int64, startTime, endTime int64, title string, limit, page int) ([]RawIncident, error) {
 	requestBody := map[string]any{
 		"p":          page,
 		"limit":      limit,
@@ -455,8 +460,8 @@ func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity
 	if severity != "" {
 		requestBody["incident_severity"] = severity
 	}
-	if channelID > 0 {
-		requestBody["channel_id"] = channelID
+	if len(channelIDs) > 0 {
+		requestBody["channel_ids"] = channelIDs
 	}
 	if title != "" {
 		requestBody["title"] = title

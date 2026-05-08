@@ -10,13 +10,16 @@ import (
 
 // ListChangesInput contains parameters for listing changes
 type ListChangesInput struct {
-	ChangeIDs []string // Direct lookup by change IDs
-	ChannelID int64    // Filter by collaboration space ID
-	StartTime int64    // Unix timestamp (seconds)
-	EndTime   int64    // Unix timestamp (seconds)
-	Type      string   // Filter by change type
-	Limit     int      // Max results (default 20)
-	Page      int      // Page number (default 1)
+	ChangeIDs  []string // Direct lookup by change IDs
+	ChannelIDs []int64  // Filter by collaboration space IDs
+	// Deprecated: use ChannelIDs. The backend /change/list endpoint expects
+	// channel_ids (array) — singular channel_id is silently ignored.
+	ChannelID int64
+	StartTime int64 // Unix timestamp (seconds)
+	EndTime   int64 // Unix timestamp (seconds)
+	Type      string
+	Limit     int
+	Page      int
 }
 
 // ListChangesOutput contains the result of listing changes
@@ -44,8 +47,8 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 	if len(input.ChangeIDs) > 0 {
 		requestBody["change_ids"] = input.ChangeIDs
 	}
-	if input.ChannelID > 0 {
-		requestBody["channel_id"] = input.ChannelID
+	if channelIDs := mergeChannelIDs(input.ChannelIDs, input.ChannelID); len(channelIDs) > 0 {
+		requestBody["channel_ids"] = channelIDs
 	}
 	if input.StartTime > 0 {
 		requestBody["start_time"] = input.StartTime
