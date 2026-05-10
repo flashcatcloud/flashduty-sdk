@@ -329,32 +329,66 @@ type UpdateIncidentInput struct {
 	Title        string         // Optional, empty = skip
 	Description  string         // Optional
 	Severity     string         // Optional
+	Impact       string         // Optional
+	RootCause    string         // Optional
+	Resolution   string         // Optional
 	CustomFields map[string]any // Optional
 }
 
 // UpdateIncident updates an incident's fields. Returns the list of updated field names.
+//
+// Built-in fields (title, description, severity, impact, root_cause, resolution)
+// are sent in a single POST to /incident/reset. The legacy per-field endpoints
+// (/incident/{title,description,severity}/reset) are deliberately not used:
+// they require JWT/cookie auth in the gateway, while /incident/reset accepts
+// app_key, which is what SDK callers carry. Custom fields go through
+// /incident/field/reset, one call per field, because that endpoint takes a
+// single field_name/field_value pair.
 func (c *Client) UpdateIncident(ctx context.Context, input *UpdateIncidentInput) ([]string, error) {
 	updatedFields := make([]string, 0)
 
+	resetBody := map[string]any{"incident_id": input.IncidentID}
 	if input.Title != "" {
-		if err := c.updateIncidentField(ctx, input.IncidentID, "/incident/title/reset", "title", input.Title); err != nil {
-			return nil, fmt.Errorf("unable to update title: %w", err)
-		}
+		resetBody["title"] = input.Title
 		updatedFields = append(updatedFields, "title")
 	}
-
 	if input.Description != "" {
-		if err := c.updateIncidentField(ctx, input.IncidentID, "/incident/description/reset", "description", input.Description); err != nil {
-			return nil, fmt.Errorf("unable to update description: %w", err)
-		}
+		resetBody["description"] = input.Description
 		updatedFields = append(updatedFields, "description")
 	}
-
 	if input.Severity != "" {
-		if err := c.updateIncidentField(ctx, input.IncidentID, "/incident/severity/reset", "incident_severity", input.Severity); err != nil {
-			return nil, fmt.Errorf("unable to update severity: %w", err)
-		}
+		resetBody["incident_severity"] = input.Severity
 		updatedFields = append(updatedFields, "severity")
+	}
+	if input.Impact != "" {
+		resetBody["impact"] = input.Impact
+		updatedFields = append(updatedFields, "impact")
+	}
+	if input.RootCause != "" {
+		resetBody["root_cause"] = input.RootCause
+		updatedFields = append(updatedFields, "root_cause")
+	}
+	if input.Resolution != "" {
+		resetBody["resolution"] = input.Resolution
+		updatedFields = append(updatedFields, "resolution")
+	}
+
+	if len(resetBody) > 1 {
+		resp, err := c.makeRequest(ctx, "POST", "/incident/reset", resetBody)
+		if err != nil {
+			return nil, fmt.Errorf("unable to update incident: %w", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			return nil, handleAPIError(c.logger, resp)
+		}
+		var result FlashdutyResponse
+		if err := parseResponse(c.logger, resp, &result); err != nil {
+			return nil, err
+		}
+		if result.Error != nil {
+			return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
+		}
 	}
 
 	if len(input.CustomFields) > 0 {
@@ -521,33 +555,6 @@ func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity
 		return nil, nil
 	}
 	return result.Data.Items, nil
-}
-
-// updateIncidentField is a helper to update a single incident field
-func (c *Client) updateIncidentField(ctx context.Context, incidentID, endpoint, fieldName, fieldValue string) error {
-	requestBody := map[string]any{
-		"incident_id": incidentID,
-		fieldName:     fieldValue,
-	}
-
-	resp, err := c.makeRequest(ctx, "POST", endpoint, requestBody)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-	return nil
 }
 
 // GetIncidentDetailInput contains parameters for getting incident detail
