@@ -33,6 +33,13 @@ type ListIncidentsInput struct {
 	Limit         int
 	Page          int
 	IncludeAlerts bool
+	// AlertsPreviewLimit caps how many alerts per incident populate
+	// AlertsPreview when IncludeAlerts is true. When <=0, falls back to the
+	// SDK's defaultQueryLimit. Smaller values reduce response size sharply
+	// for callers (e.g. LLMs) that just want a representative sample rather
+	// than an exhaustive list — drill into one incident with ListIncidentAlerts
+	// when the full set is needed.
+	AlertsPreviewLimit int
 }
 
 // ListIncidentsOutput contains the result of listing incidents
@@ -82,11 +89,15 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 
 	// Fetch alerts concurrently if requested
 	if input.IncludeAlerts && len(enrichedIncidents) > 0 {
+		previewLimit := input.AlertsPreviewLimit
+		if previewLimit <= 0 {
+			previewLimit = defaultQueryLimit
+		}
 		g, gctx := errgroup.WithContext(ctx)
 		for i := range enrichedIncidents {
 			incidentID := enrichedIncidents[i].IncidentID
 			g.Go(func() error {
-				alerts, total, fetchErr := c.fetchIncidentAlerts(gctx, incidentID, defaultQueryLimit)
+				alerts, total, fetchErr := c.fetchIncidentAlerts(gctx, incidentID, previewLimit)
 				if fetchErr != nil {
 					return fetchErr
 				}
