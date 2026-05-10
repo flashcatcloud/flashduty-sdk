@@ -87,11 +87,17 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 		return nil, fmt.Errorf("unable to load additional incident details: %w", err)
 	}
 
-	// Fetch alerts concurrently if requested
-	if input.IncludeAlerts && len(enrichedIncidents) > 0 {
-		previewLimit := input.AlertsPreviewLimit
-		if previewLimit <= 0 {
-			previewLimit = defaultQueryLimit
+	// AlertsTotal is always populated so callers can use it as a volume gauge
+	// without paying the preview payload cost; AlertsPreview is only filled
+	// when IncludeAlerts is true. When the caller doesn't want previews, the
+	// per-incident fetch uses limit=1 and the returned items are discarded.
+	if len(enrichedIncidents) > 0 {
+		previewLimit := 1
+		if input.IncludeAlerts {
+			previewLimit = input.AlertsPreviewLimit
+			if previewLimit <= 0 {
+				previewLimit = defaultQueryLimit
+			}
 		}
 		g, gctx := errgroup.WithContext(ctx)
 		for i := range enrichedIncidents {
@@ -101,7 +107,9 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 				if fetchErr != nil {
 					return fetchErr
 				}
-				enrichedIncidents[i].AlertsPreview = alerts
+				if input.IncludeAlerts {
+					enrichedIncidents[i].AlertsPreview = alerts
+				}
 				enrichedIncidents[i].AlertsTotal = total
 				return nil
 			})
