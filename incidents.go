@@ -23,6 +23,12 @@ type ListIncidentsInput struct {
 	ChannelID     int64
 	StartTime     int64 // Unix timestamp (seconds), required if no IncidentIDs
 	EndTime       int64 // Unix timestamp (seconds), required if no IncidentIDs
+	// Query is the backend's full-text search field on /incident/list. It
+	// searches across title/labels/content via Doris and also resolves a 24-char
+	// ObjectID to incident_ids and a 6-char string to a num lookup. Prefer this
+	// over Title for free-form search; fall back to Title only when the caller
+	// wants exact/regex/wildcard matching against the title field alone.
+	Query         string
 	Title         string
 	Limit         int
 	Page          int
@@ -55,7 +61,7 @@ func (c *Client) ListIncidents(ctx context.Context, input *ListIncidentsInput) (
 		if page <= 0 {
 			page = 1
 		}
-		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, mergeChannelIDs(input.ChannelIDs, input.ChannelID), input.StartTime, input.EndTime, input.Title, limit, page)
+		rawIncidents, err = c.fetchIncidentsByFilters(ctx, input.Progress, input.Severity, mergeChannelIDs(input.ChannelIDs, input.ChannelID), input.StartTime, input.EndTime, input.Query, input.Title, limit, page)
 	}
 
 	if err != nil {
@@ -446,7 +452,7 @@ func (c *Client) fetchIncidentsByIDs(ctx context.Context, incidentIDs []string) 
 }
 
 // fetchIncidentsByFilters fetches incidents by filters
-func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelIDs []int64, startTime, endTime int64, title string, limit, page int) ([]RawIncident, error) {
+func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity string, channelIDs []int64, startTime, endTime int64, query, title string, limit, page int) ([]RawIncident, error) {
 	requestBody := map[string]any{
 		"p":          page,
 		"limit":      limit,
@@ -462,6 +468,9 @@ func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity
 	}
 	if len(channelIDs) > 0 {
 		requestBody["channel_ids"] = channelIDs
+	}
+	if query != "" {
+		requestBody["query"] = query
 	}
 	if title != "" {
 		requestBody["title"] = title
