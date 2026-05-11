@@ -619,6 +619,33 @@ func TestSanitizeBodyRedactsNestedCaseInsensitiveAliases(t *testing.T) {
 	}
 }
 
+// env and headers maps carry user-chosen keys (e.g. OPENAI_API_KEY,
+// X-Prom-Token) whose names the static allow-list cannot anticipate. Every
+// value under these parents must be redacted unconditionally, while sibling
+// fields stay visible so the log still indicates payload shape.
+func TestSanitizeBodyRedactsAllChildrenOfEnvAndHeaders(t *testing.T) {
+	input := `{"env":{"OPENAI_API_KEY":"sk-secret","FOO":"bar"},"headers":{"X-Custom":"tok"},"server_name":"prom-prod"}`
+
+	got := sanitizeBody(input)
+
+	for _, secret := range []string{"sk-secret", "bar", "tok"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("sanitizeBody(%q) = %q; must not contain %q", input, got, secret)
+		}
+	}
+
+	for _, want := range []string{
+		`"OPENAI_API_KEY":"[REDACTED]"`,
+		`"FOO":"[REDACTED]"`,
+		`"X-Custom":"[REDACTED]"`,
+		`"server_name":"prom-prod"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("sanitizeBody(%q) = %q; want to contain %q", input, got, want)
+		}
+	}
+}
+
 func TestMakeRequestLogsRedactedBody(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
