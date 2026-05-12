@@ -51,8 +51,40 @@ func TestStartStatusPageMigration(t *testing.T) {
 	if gotBody["source_page_id"] != "page_123" {
 		t.Errorf("source_page_id = %v, want page_123", gotBody["source_page_id"])
 	}
+	if _, ok := gotBody["url_name"]; ok {
+		t.Errorf("url_name should be omitted when empty, got %v", gotBody["url_name"])
+	}
 	if out.JobID != "job-1" {
 		t.Errorf("JobID = %s, want job-1", out.JobID)
+	}
+}
+
+func TestStartStatusPageMigrationSendsURLName(t *testing.T) {
+	var gotBody map[string]any
+
+	client := newSDKExtensionsTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotBody = decodeJSONBody(t, r)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{"job_id": "job-url"},
+		})
+	})
+
+	out, err := client.StartStatusPageMigration(context.Background(), &StartStatusPageMigrationInput{
+		SourceAPIKey: "atlassian-key",
+		SourcePageID: "page_123",
+		URLName:      "desired-page",
+	})
+	if err != nil {
+		t.Fatalf("StartStatusPageMigration() error = %v", err)
+	}
+
+	if gotBody["url_name"] != "desired-page" {
+		t.Errorf("url_name = %v, want desired-page", gotBody["url_name"])
+	}
+	if out.JobID != "job-url" {
+		t.Errorf("JobID = %s, want job-url", out.JobID)
 	}
 }
 

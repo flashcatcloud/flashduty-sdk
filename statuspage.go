@@ -280,6 +280,7 @@ func (c *Client) CreateChangeTimeline(ctx context.Context, input *CreateChangeTi
 type StartStatusPageMigrationInput struct {
 	SourceAPIKey string // Required. API key for the source provider (e.g. Atlassian Statuspage)
 	SourcePageID string // Required. Page identifier in the source provider
+	URLName      string // Optional. URL name to use when creating a new Flashduty public status page
 }
 
 // StartStatusPageEmailSubscriberMigrationInput contains parameters for starting
@@ -336,10 +337,14 @@ func (c *Client) StartStatusPageMigration(ctx context.Context, input *StartStatu
 	if input == nil {
 		return nil, errors.New("input is required")
 	}
-	return c.startStatusPageMigration(ctx, "/status-page/migrate-structure", map[string]any{
+	body := map[string]any{
 		"api_key":        input.SourceAPIKey,
 		"source_page_id": input.SourcePageID,
-	})
+	}
+	if input.URLName != "" {
+		body["url_name"] = input.URLName
+	}
+	return c.startStatusPageMigration(ctx, "/status-page/migrate-structure", body)
 }
 
 // StartStatusPageEmailSubscriberMigration starts an asynchronous migration of
