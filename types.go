@@ -89,7 +89,7 @@ type ChannelInfo struct {
 	CreatorName string `json:"creator_name,omitempty" toon:"creator_name,omitempty"`
 }
 
-// TeamInfo represents team information
+// TeamInfo represents team information (used by list/batch endpoints)
 type TeamInfo struct {
 	TeamID   int64        `json:"team_id" toon:"team_id"`
 	TeamName string       `json:"team_name" toon:"team_name"`
@@ -101,6 +101,57 @@ type TeamMember struct {
 	PersonID   int64  `json:"person_id" toon:"person_id"`
 	PersonName string `json:"person_name" toon:"person_name"`
 	Email      string `json:"email,omitempty" toon:"email,omitempty"`
+}
+
+// TeamItem represents full team detail from /team/info
+type TeamItem struct {
+	AccountID     int64        `json:"account_id" toon:"account_id"`
+	TeamID        int64        `json:"team_id" toon:"team_id"`
+	TeamName      string       `json:"team_name" toon:"team_name"`
+	Description   string       `json:"description" toon:"description"`
+	Status        string       `json:"status" toon:"status"`
+	CreatorID     int64        `json:"creator_id" toon:"creator_id"`
+	CreatorName   string       `json:"creator_name" toon:"creator_name"`
+	UpdatedBy     int64        `json:"updated_by" toon:"updated_by"`
+	UpdatedByName string       `json:"updated_by_name" toon:"updated_by_name"`
+	CreatedAt     int64        `json:"created_at" toon:"created_at"`
+	UpdatedAt     int64        `json:"updated_at" toon:"updated_at"`
+	PersonIDs     []int64      `json:"person_ids" toon:"person_ids"`
+	RefID         string       `json:"ref_id" toon:"ref_id"`
+	Members       []TeamMember `json:"members,omitempty" toon:"members,omitempty"`
+}
+
+// TeamGetInput contains parameters for getting a single team
+type TeamGetInput struct {
+	TeamID   int64
+	TeamName string
+	RefID    string
+}
+
+// TeamUpsertInput contains parameters for creating or updating a team
+type TeamUpsertInput struct {
+	TeamID           int64
+	TeamName         string
+	Description      string
+	PersonIDs        []int64
+	Emails           []string
+	Phones           []string
+	CountryCode      string
+	RefID            string
+	ResetIfNameExist bool
+}
+
+// TeamUpsertOutput contains the result of creating or updating a team
+type TeamUpsertOutput struct {
+	TeamID   int64  `json:"team_id"`
+	TeamName string `json:"team_name"`
+}
+
+// TeamDeleteInput contains parameters for deleting a team
+type TeamDeleteInput struct {
+	TeamID   int64
+	TeamName string
+	RefID    string
 }
 
 // FieldInfo represents custom field definition
