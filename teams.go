@@ -313,11 +313,13 @@ func (c *Client) fetchTeamMembers(ctx context.Context, teamID int64) ([]TeamMemb
 	return members, nil
 }
 
-// UpsertTeam creates or updates a team.
+// UpsertTeam creates or updates a team. TeamName is required by the API.
 func (c *Client) UpsertTeam(ctx context.Context, input *TeamUpsertInput) (*TeamUpsertOutput, error) {
-	requestBody := map[string]any{}
-	if input.TeamName != "" {
-		requestBody["team_name"] = input.TeamName
+	if input.TeamName == "" {
+		return nil, fmt.Errorf("team_name is required")
+	}
+	requestBody := map[string]any{
+		"team_name": input.TeamName,
 	}
 	if input.TeamID != 0 {
 		requestBody["team_id"] = input.TeamID
