@@ -91,9 +91,10 @@ type ChannelInfo struct {
 
 // TeamInfo represents team information (used by list/batch endpoints)
 type TeamInfo struct {
-	TeamID   int64        `json:"team_id" toon:"team_id"`
-	TeamName string       `json:"team_name" toon:"team_name"`
-	Members  []TeamMember `json:"members,omitempty" toon:"members,omitempty"`
+	TeamID    int64        `json:"team_id" toon:"team_id"`
+	TeamName  string       `json:"team_name" toon:"team_name"`
+	PersonIDs []int64      `json:"person_ids,omitempty" toon:"person_ids,omitempty"`
+	Members   []TeamMember `json:"members,omitempty" toon:"members,omitempty"`
 }
 
 // TeamMember represents a team member

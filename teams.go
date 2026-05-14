@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const defaultTeamsQueryLimit = 20
@@ -49,13 +47,9 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 			Error *DutyError `json:"error,omitempty"`
 			Data  *struct {
 				Items []struct {
-					TeamID   int64  `json:"team_id"`
-					TeamName string `json:"team_name"`
-					Members  []struct {
-						PersonID   int64  `json:"person_id"`
-						PersonName string `json:"person_name"`
-						Email      string `json:"email,omitempty"`
-					} `json:"members,omitempty"`
+					TeamID    int64   `json:"team_id"`
+					TeamName  string  `json:"team_name"`
+					PersonIDs []int64 `json:"person_ids"`
 				} `json:"items"`
 			} `json:"data,omitempty"`
 		}
@@ -69,23 +63,15 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 		teams := []TeamInfo{}
 		if result.Data != nil {
 			for _, t := range result.Data.Items {
-				team := TeamInfo{
-					TeamID:   t.TeamID,
-					TeamName: t.TeamName,
-				}
-				if len(t.Members) > 0 {
-					team.Members = make([]TeamMember, 0, len(t.Members))
-					for _, m := range t.Members {
-						team.Members = append(team.Members, TeamMember{
-							PersonID:   m.PersonID,
-							PersonName: m.PersonName,
-							Email:      m.Email,
-						})
-					}
-				}
-				teams = append(teams, team)
+				teams = append(teams, TeamInfo{
+					TeamID:    t.TeamID,
+					TeamName:  t.TeamName,
+					PersonIDs: t.PersonIDs,
+				})
 			}
 		}
+
+		c.enrichTeamMembers(ctx, teams)
 
 		return &ListTeamsOutput{
 			Teams: teams,
@@ -139,13 +125,9 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 		Error *DutyError `json:"error,omitempty"`
 		Data  *struct {
 			Items []struct {
-				TeamID   int64  `json:"team_id"`
-				TeamName string `json:"team_name"`
-				Members  []struct {
-					PersonID   int64  `json:"person_id"`
-					PersonName string `json:"person_name"`
-					Email      string `json:"email,omitempty"`
-				} `json:"members,omitempty"`
+				TeamID    int64   `json:"team_id"`
+				TeamName  string  `json:"team_name"`
+				PersonIDs []int64 `json:"person_ids"`
 			} `json:"items"`
 			Total int `json:"total"`
 		} `json:"data,omitempty"`
@@ -161,24 +143,16 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 	total := 0
 	if result.Data != nil {
 		for _, t := range result.Data.Items {
-			team := TeamInfo{
-				TeamID:   t.TeamID,
-				TeamName: t.TeamName,
-			}
-			if len(t.Members) > 0 {
-				team.Members = make([]TeamMember, 0, len(t.Members))
-				for _, m := range t.Members {
-					team.Members = append(team.Members, TeamMember{
-						PersonID:   m.PersonID,
-						PersonName: m.PersonName,
-						Email:      m.Email,
-					})
-				}
-			}
-			teams = append(teams, team)
+			teams = append(teams, TeamInfo{
+				TeamID:    t.TeamID,
+				TeamName:  t.TeamName,
+				PersonIDs: t.PersonIDs,
+			})
 		}
 		total = result.Data.Total
 	}
+
+	c.enrichTeamMembers(ctx, teams)
 
 	return &ListTeamsOutput{
 		Teams: teams,
@@ -186,8 +160,41 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 	}, nil
 }
 
+// enrichTeamMembers resolves member names for a slice of teams via /person/infos.
+func (c *Client) enrichTeamMembers(ctx context.Context, teams []TeamInfo) {
+	var allIDs []int64
+	for _, t := range teams {
+		allIDs = append(allIDs, t.PersonIDs...)
+	}
+	if len(allIDs) == 0 {
+		return
+	}
+
+	personMap, err := c.fetchPersonInfos(ctx, allIDs)
+	if err != nil {
+		c.logger.Warn("failed to enrich team members", "error", err)
+		return
+	}
+
+	for i := range teams {
+		members := make([]TeamMember, 0, len(teams[i].PersonIDs))
+		for _, pid := range teams[i].PersonIDs {
+			if p, ok := personMap[pid]; ok {
+				members = append(members, TeamMember{
+					PersonID:   p.PersonID,
+					PersonName: p.PersonName,
+					Email:      p.Email,
+				})
+			} else {
+				members = append(members, TeamMember{PersonID: pid})
+			}
+		}
+		teams[i].Members = members
+	}
+}
+
 // GetTeamInfo retrieves full team detail by ID, name, or ref_id.
-// It calls /team/info for full metadata and /team/infos for member names in parallel.
+// It calls /team/info for metadata, then /person/infos to resolve member names.
 func (c *Client) GetTeamInfo(ctx context.Context, input *TeamGetInput) (*TeamItem, error) {
 	infoBody := map[string]any{}
 	if input.TeamID != 0 {
@@ -200,80 +207,9 @@ func (c *Client) GetTeamInfo(ctx context.Context, input *TeamGetInput) (*TeamIte
 		infoBody["ref_id"] = input.RefID
 	}
 
-	var team *TeamItem
-	var members []TeamMember
-
-	g, gctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		resp, err := c.makeRequest(gctx, "POST", "/team/info", infoBody)
-		if err != nil {
-			return fmt.Errorf("unable to get team info: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			return handleAPIError(c.logger, resp)
-		}
-
-		var result struct {
-			Error *DutyError `json:"error,omitempty"`
-			Data  *TeamItem  `json:"data,omitempty"`
-		}
-		if err := parseResponse(c.logger, resp, &result); err != nil {
-			return err
-		}
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.Data == nil {
-			return fmt.Errorf("team not found")
-		}
-		team = result.Data
-		return nil
-	})
-
-	// When looking up by ID, we can fire /team/infos in parallel for member names.
-	// For name/ref_id lookups we don't know the ID upfront, so we enrich after.
-	if input.TeamID != 0 {
-		g.Go(func() error {
-			resolved, err := c.fetchTeamMembers(gctx, input.TeamID)
-			if err != nil {
-				c.logger.Warn("failed to enrich team members", "error", err)
-				return nil
-			}
-			members = resolved
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	// For name/ref_id lookups, enrich members sequentially using the team_id we got back.
-	if input.TeamID == 0 && team != nil && len(team.PersonIDs) > 0 {
-		resolved, err := c.fetchTeamMembers(ctx, team.TeamID)
-		if err != nil {
-			c.logger.Warn("failed to enrich team members", "error", err)
-		} else {
-			members = resolved
-		}
-	}
-
-	if len(members) > 0 {
-		team.Members = members
-	}
-
-	return team, nil
-}
-
-// fetchTeamMembers retrieves member details for a team via /team/infos.
-func (c *Client) fetchTeamMembers(ctx context.Context, teamID int64) ([]TeamMember, error) {
-	infosBody := map[string]any{"team_ids": []int64{teamID}}
-	resp, err := c.makeRequest(ctx, "POST", "/team/infos", infosBody)
+	resp, err := c.makeRequest(ctx, "POST", "/team/info", infoBody)
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch team members: %w", err)
+		return nil, fmt.Errorf("unable to get team info: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -283,15 +219,7 @@ func (c *Client) fetchTeamMembers(ctx context.Context, teamID int64) ([]TeamMemb
 
 	var result struct {
 		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				Members []struct {
-					PersonID   int64  `json:"person_id"`
-					PersonName string `json:"person_name"`
-					Email      string `json:"email,omitempty"`
-				} `json:"members,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
+		Data  *TeamItem  `json:"data,omitempty"`
 	}
 	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
@@ -299,18 +227,47 @@ func (c *Client) fetchTeamMembers(ctx context.Context, teamID int64) ([]TeamMemb
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	if result.Data == nil {
+		return nil, fmt.Errorf("team not found")
+	}
 
-	var members []TeamMember
-	if result.Data != nil && len(result.Data.Items) > 0 {
-		for _, m := range result.Data.Items[0].Members {
-			members = append(members, TeamMember{
-				PersonID:   m.PersonID,
-				PersonName: m.PersonName,
-				Email:      m.Email,
-			})
+	team := result.Data
+
+	// Collect all person IDs that need enrichment: members + creator (if name missing).
+	enrichIDs := make([]int64, 0, len(team.PersonIDs)+1)
+	enrichIDs = append(enrichIDs, team.PersonIDs...)
+	if team.CreatorID != 0 && team.CreatorName == "" {
+		enrichIDs = append(enrichIDs, team.CreatorID)
+	}
+
+	if len(enrichIDs) > 0 {
+		personMap, err := c.fetchPersonInfos(ctx, enrichIDs)
+		if err != nil {
+			c.logger.Warn("failed to enrich team members", "error", err)
+		} else {
+			members := make([]TeamMember, 0, len(team.PersonIDs))
+			for _, pid := range team.PersonIDs {
+				if p, ok := personMap[pid]; ok {
+					members = append(members, TeamMember{
+						PersonID:   p.PersonID,
+						PersonName: p.PersonName,
+						Email:      p.Email,
+					})
+				} else {
+					members = append(members, TeamMember{PersonID: pid})
+				}
+			}
+			team.Members = members
+
+			if team.CreatorName == "" && team.CreatorID != 0 {
+				if p, ok := personMap[team.CreatorID]; ok {
+					team.CreatorName = p.PersonName
+				}
+			}
 		}
 	}
-	return members, nil
+
+	return team, nil
 }
 
 // UpsertTeam creates or updates a team. TeamName is required by the API.

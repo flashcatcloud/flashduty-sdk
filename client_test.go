@@ -123,39 +123,45 @@ func callListTeams(t *testing.T, c *Client) {
 func TestListTeamsByIDsPreservesMembers(t *testing.T) {
 	cap := &capturedHeaders{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/team/infos" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-
-		var body struct {
-			TeamIDs []int64 `json:"team_ids"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if len(body.TeamIDs) != 2 || body.TeamIDs[0] != 101 || body.TeamIDs[1] != 202 {
-			t.Fatalf("unexpected team_ids payload: %#v", body.TeamIDs)
-		}
-
-		cap.set(r.Header)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{
-				"items": []any{
-					map[string]any{
-						"team_id":   101,
-						"team_name": "alpha",
-						"members": []any{
-							map[string]any{
-								"person_id":   1,
-								"person_name": "Ada",
-								"email":       "ada@example.com",
-							},
+		switch r.URL.Path {
+		case "/team/infos":
+			var body struct {
+				TeamIDs []int64 `json:"team_ids"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if len(body.TeamIDs) != 2 || body.TeamIDs[0] != 101 || body.TeamIDs[1] != 202 {
+				t.Fatalf("unexpected team_ids payload: %#v", body.TeamIDs)
+			}
+			cap.set(r.Header)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"items": []any{
+						map[string]any{
+							"team_id":    101,
+							"team_name":  "alpha",
+							"person_ids": []int64{1},
 						},
 					},
 				},
-			},
-		})
+			})
+		case "/person/infos":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"items": []any{
+						map[string]any{
+							"person_id":   1,
+							"person_name": "Ada",
+							"email":       "ada@example.com",
+						},
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer ts.Close()
 
