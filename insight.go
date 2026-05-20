@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // InsightQueryInput contains common parameters for all /insight/* endpoints
@@ -87,32 +86,16 @@ func (c *Client) QueryInsightByTeam(ctx context.Context, input *InsightQueryInpu
 		return nil, fmt.Errorf("query input is required")
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/insight/team", input.buildRequestBody())
+	result, err := postData[struct {
+		Items []DimensionInsightItem `json:"items"`
+	}](c, ctx, "/insight/team", input.buildRequestBody(), "failed to query team insights")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query team insights: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []DimensionInsightItem `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	items := []DimensionInsightItem{}
-	if result.Data != nil {
-		items = result.Data.Items
+	if result != nil {
+		items = result.Items
 	}
 
 	return &QueryInsightByTeamOutput{Items: items}, nil
@@ -129,32 +112,16 @@ func (c *Client) QueryInsightByResponder(ctx context.Context, input *InsightQuer
 		return nil, fmt.Errorf("query input is required")
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/insight/responder", input.buildRequestBody())
+	result, err := postData[struct {
+		Items []ResponderInsightItem `json:"items"`
+	}](c, ctx, "/insight/responder", input.buildRequestBody(), "failed to query responder insights")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query responder insights: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []ResponderInsightItem `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	items := []ResponderInsightItem{}
-	if result.Data != nil {
-		items = result.Data.Items
+	if result != nil {
+		items = result.Items
 	}
 
 	return &QueryInsightByResponderOutput{Items: items}, nil
@@ -171,32 +138,16 @@ func (c *Client) QueryInsightByChannel(ctx context.Context, input *InsightQueryI
 		return nil, fmt.Errorf("query input is required")
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/insight/channel", input.buildRequestBody())
+	result, err := postData[struct {
+		Items []DimensionInsightItem `json:"items"`
+	}](c, ctx, "/insight/channel", input.buildRequestBody(), "failed to query channel insights")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query channel insights: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []DimensionInsightItem `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	items := []DimensionInsightItem{}
-	if result.Data != nil {
-		items = result.Data.Items
+	if result != nil {
+		items = result.Items
 	}
 
 	return &QueryInsightByChannelOutput{Items: items}, nil
@@ -238,32 +189,16 @@ func (c *Client) QueryInsightAlertTopK(ctx context.Context, input *QueryInsightA
 		body["asc"] = true
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/insight/alert/topk-by-label", body)
+	result, err := postData[struct {
+		Items []InsightAlertByLabelItem `json:"items"`
+	}](c, ctx, "/insight/alert/topk-by-label", body, "failed to query alert top-K")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query alert top-K: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []InsightAlertByLabelItem `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	items := []InsightAlertByLabelItem{}
-	if result.Data != nil {
-		items = result.Data.Items
+	if result != nil {
+		items = result.Items
 	}
 
 	return &QueryInsightAlertTopKOutput{Items: items}, nil
@@ -309,41 +244,25 @@ func (c *Client) QueryInsightIncidentList(ctx context.Context, input *QueryInsig
 		body["search_after_ctx"] = input.SearchAfterCtx
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/insight/incident/list", body)
+	result, err := postData[struct {
+		Items          []InsightIncidentItem `json:"items"`
+		Total          int                   `json:"total"`
+		HasNextPage    bool                  `json:"has_next_page"`
+		SearchAfterCtx string                `json:"search_after_ctx,omitempty"`
+	}](c, ctx, "/insight/incident/list", body, "failed to query insight incidents")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query insight incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items          []InsightIncidentItem `json:"items"`
-			Total          int                   `json:"total"`
-			HasNextPage    bool                  `json:"has_next_page"`
-			SearchAfterCtx string                `json:"search_after_ctx,omitempty"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	items := []InsightIncidentItem{}
 	total := 0
 	hasNextPage := false
 	searchAfterCtx := ""
-	if result.Data != nil {
-		items = result.Data.Items
-		total = result.Data.Total
-		hasNextPage = result.Data.HasNextPage
-		searchAfterCtx = result.Data.SearchAfterCtx
+	if result != nil {
+		items = result.Items
+		total = result.Total
+		hasNextPage = result.HasNextPage
+		searchAfterCtx = result.SearchAfterCtx
 	}
 
 	return &QueryInsightIncidentListOutput{

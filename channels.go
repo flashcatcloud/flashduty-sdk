@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -45,48 +44,30 @@ func (c *Client) ListChannels(ctx context.Context, input *ListChannelsInput) (*L
 	}
 
 	// List all channels
-	resp, err := c.makeRequest(ctx, "POST", "/channel/list", map[string]any{})
+	result, err := postData[struct {
+		Items []struct {
+			ChannelID   int64  `json:"channel_id"`
+			ChannelName string `json:"channel_name"`
+			TeamID      int64  `json:"team_id,omitempty"`
+			CreatorID   int64  `json:"creator_id,omitempty"`
+		} `json:"items"`
+	}](c, ctx, "/channel/list", map[string]any{}, "unable to list channels")
 	if err != nil {
-		return nil, fmt.Errorf("unable to list channels: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				ChannelID   int64  `json:"channel_id"`
-				ChannelName string `json:"channel_name"`
-				TeamID      int64  `json:"team_id,omitempty"`
-				CreatorID   int64  `json:"creator_id,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	channels := []ChannelInfo{}
-	if result.Data != nil {
-		for _, ch := range result.Data.Items {
-			// Filter by name if provided (case-insensitive substring match)
-			if input.Name != "" && !strings.Contains(strings.ToLower(ch.ChannelName), strings.ToLower(input.Name)) {
-				continue
-			}
-			channels = append(channels, ChannelInfo{
-				ChannelID:   ch.ChannelID,
-				ChannelName: ch.ChannelName,
-				TeamID:      ch.TeamID,
-				CreatorID:   ch.CreatorID,
-			})
+	for _, ch := range result.Items {
+		// Filter by name if provided (case-insensitive substring match)
+		if input.Name != "" && !strings.Contains(strings.ToLower(ch.ChannelName), strings.ToLower(input.Name)) {
+			continue
 		}
+		channels = append(channels, ChannelInfo{
+			ChannelID:   ch.ChannelID,
+			ChannelName: ch.ChannelName,
+			TeamID:      ch.TeamID,
+			CreatorID:   ch.CreatorID,
+		})
 	}
 
 	enrichedChannels, err := c.enrichChannels(ctx, channels)

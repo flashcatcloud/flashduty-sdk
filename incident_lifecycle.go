@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // IncidentNotifyInput contains optional notification controls for incident write operations.
@@ -108,22 +107,22 @@ func (o IncidentWarRoomObserver) DisplayName() string {
 
 // UnackIncidents cancels acknowledgement for one or more incidents.
 func (c *Client) UnackIncidents(ctx context.Context, incidentIDs []string) error {
-	return c.postEmpty(ctx, "/incident/unack", map[string]any{"incident_ids": incidentIDs}, "failed to unack incidents")
+	return postEmpty(c, ctx, "/incident/unack", map[string]any{"incident_ids": incidentIDs}, "failed to unack incidents")
 }
 
 // WakeIncidents wakes one or more incidents from snooze.
 func (c *Client) WakeIncidents(ctx context.Context, incidentIDs []string) error {
-	return c.postEmpty(ctx, "/incident/wake", map[string]any{"incident_ids": incidentIDs}, "failed to wake incidents")
+	return postEmpty(c, ctx, "/incident/wake", map[string]any{"incident_ids": incidentIDs}, "failed to wake incidents")
 }
 
 // RemoveIncidents removes one or more incidents.
 func (c *Client) RemoveIncidents(ctx context.Context, incidentIDs []string) error {
-	return c.postEmpty(ctx, "/incident/remove", map[string]any{"incident_ids": incidentIDs}, "failed to remove incidents")
+	return postEmpty(c, ctx, "/incident/remove", map[string]any{"incident_ids": incidentIDs}, "failed to remove incidents")
 }
 
 // DisableIncidentMerge disables merge for one or more incidents.
 func (c *Client) DisableIncidentMerge(ctx context.Context, incidentIDs []string) error {
-	return c.postEmpty(ctx, "/incident/disable-merge", map[string]any{"incident_ids": incidentIDs}, "failed to disable incident merge")
+	return postEmpty(c, ctx, "/incident/disable-merge", map[string]any{"incident_ids": incidentIDs}, "failed to disable incident merge")
 }
 
 // CommentIncidents adds a comment to one or more incidents.
@@ -141,7 +140,7 @@ func (c *Client) CommentIncidents(ctx context.Context, input *IncidentCommentInp
 	if notify := buildIncidentNotifyBody(input.Notify); len(notify) > 0 {
 		body["notify"] = notify
 	}
-	return c.postEmpty(ctx, "/incident/comment", body, "failed to comment incidents")
+	return postEmpty(c, ctx, "/incident/comment", body, "failed to comment incidents")
 }
 
 // AddIncidentResponders adds responders to an incident.
@@ -156,7 +155,7 @@ func (c *Client) AddIncidentResponders(ctx context.Context, input *IncidentAddRe
 	if notify := buildIncidentNotifyBody(input.Notify); len(notify) > 0 {
 		body["notify"] = notify
 	}
-	return c.postEmpty(ctx, "/incident/responder/add", body, "failed to add incident responders")
+	return postEmpty(c, ctx, "/incident/responder/add", body, "failed to add incident responders")
 }
 
 // CreateIncidentWarRoom creates an IM war room for an incident.
@@ -205,7 +204,7 @@ func (c *Client) DeleteIncidentWarRoom(ctx context.Context, input *IncidentWarRo
 	if input == nil {
 		return fmt.Errorf("incident war-room delete input is required")
 	}
-	return c.postEmpty(ctx, "/incident/war-room/delete", map[string]any{
+	return postEmpty(c, ctx, "/incident/war-room/delete", map[string]any{
 		"incident_id":    input.IncidentID,
 		"integration_id": input.IntegrationID,
 	}, "failed to delete incident war room")
@@ -216,7 +215,7 @@ func (c *Client) AddIncidentWarRoomMembers(ctx context.Context, input *IncidentW
 	if input == nil {
 		return fmt.Errorf("incident war-room add-member input is required")
 	}
-	return c.postEmpty(ctx, "/incident/war-room/add-member", map[string]any{
+	return postEmpty(c, ctx, "/incident/war-room/add-member", map[string]any{
 		"integration_id": input.IntegrationID,
 		"chat_id":        input.ChatID,
 		"member_ids":     input.MemberIDs,
@@ -251,53 +250,4 @@ func buildIncidentNotifyBody(input *IncidentNotifyInput) map[string]any {
 		notify["template_id"] = input.TemplateID
 	}
 	return notify
-}
-
-func (c *Client) postEmpty(ctx context.Context, path string, body any, errPrefix string) error {
-	resp, err := c.makeRequest(ctx, "POST", path, body)
-	if err != nil {
-		return fmt.Errorf("%s: %w", errPrefix, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
-}
-
-func postData[T any](c *Client, ctx context.Context, path string, body any, errPrefix string) (*T, error) {
-	resp, err := c.makeRequest(ctx, "POST", path, body)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errPrefix, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *T         `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
-		var zero T
-		return &zero, nil
-	}
-	return result.Data, nil
 }

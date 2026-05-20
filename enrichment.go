@@ -2,8 +2,6 @@ package flashduty
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -16,34 +14,17 @@ func (c *Client) fetchIncidentTimeline(ctx context.Context, incidentID string) (
 		"asc":         true,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/feed", requestBody)
+	result, err := postData[struct {
+		Items []RawTimelineItem `json:"items"`
+	}](c, ctx, "/incident/feed", requestBody, "unable to fetch timeline")
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch timeline: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []RawTimelineItem `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-
-	if result.Data == nil {
+	if result == nil {
 		return nil, nil
 	}
 
-	return result.Data.Items, nil
+	return result.Items, nil
 }
 
 // fetchIncidentAlerts fetches alerts for a single incident
@@ -54,43 +35,26 @@ func (c *Client) fetchIncidentAlerts(ctx context.Context, incidentID string, lim
 		"limit":       limit,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/alert/list", requestBody)
+	result, err := postData[struct {
+		Total int `json:"total"`
+		Items []struct {
+			AlertID     string            `json:"alert_id"`
+			Title       string            `json:"title"`
+			Severity    string            `json:"severity"`
+			Status      string            `json:"status"`
+			TriggerTime int64             `json:"trigger_time"`
+			Labels      map[string]string `json:"labels,omitempty"`
+		} `json:"items"`
+	}](c, ctx, "/incident/alert/list", requestBody, "unable to fetch alerts")
 	if err != nil {
-		return nil, 0, fmt.Errorf("unable to fetch alerts: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, 0, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Total int `json:"total"`
-			Items []struct {
-				AlertID     string            `json:"alert_id"`
-				Title       string            `json:"title"`
-				Severity    string            `json:"severity"`
-				Status      string            `json:"status"`
-				TriggerTime int64             `json:"trigger_time"`
-				Labels      map[string]string `json:"labels,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, 0, err
 	}
-	if result.Error != nil {
-		return nil, 0, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-
-	if result.Data == nil {
+	if result == nil {
 		return nil, 0, nil
 	}
 
-	alerts := make([]AlertPreview, 0, len(result.Data.Items))
-	for _, item := range result.Data.Items {
+	alerts := make([]AlertPreview, 0, len(result.Items))
+	for _, item := range result.Items {
 		alerts = append(alerts, AlertPreview{
 			AlertID:   item.AlertID,
 			Title:     item.Title,
@@ -100,7 +64,7 @@ func (c *Client) fetchIncidentAlerts(ctx context.Context, incidentID string, lim
 			Labels:    item.Labels,
 		})
 	}
-	return alerts, result.Data.Total, nil
+	return alerts, result.Total, nil
 }
 
 // fetchPersonInfos fetches person information by IDs
@@ -129,38 +93,22 @@ func (c *Client) fetchPersonInfos(ctx context.Context, personIDs []int64) (map[i
 		"person_ids": uniqueIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/person/infos", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			PersonID   int64  `json:"person_id"`
+			PersonName string `json:"person_name"`
+			Email      string `json:"email,omitempty"`
+			Avatar     string `json:"avatar,omitempty"`
+			As         string `json:"as,omitempty"`
+		} `json:"items"`
+	}](c, ctx, "/person/infos", requestBody, "unable to fetch person information")
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch person information: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				PersonID   int64  `json:"person_id"`
-				PersonName string `json:"person_name"`
-				Email      string `json:"email,omitempty"`
-				Avatar     string `json:"avatar,omitempty"`
-				As         string `json:"as,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
 	}
 
 	personMap := make(map[int64]PersonInfo)
-	if result.Data != nil {
-		for _, item := range result.Data.Items {
+	if result != nil {
+		for _, item := range result.Items {
 			personMap[item.PersonID] = PersonInfo{
 				PersonID:   item.PersonID,
 				PersonName: item.PersonName,
@@ -199,35 +147,19 @@ func (c *Client) fetchTeamInfos(ctx context.Context, teamIDs []int64) (map[int64
 		"team_ids": uniqueIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/team/infos", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			TeamID   int64  `json:"team_id"`
+			TeamName string `json:"team_name"`
+		} `json:"items"`
+	}](c, ctx, "/team/infos", requestBody, "unable to fetch team information")
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch team information: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				TeamID   int64  `json:"team_id"`
-				TeamName string `json:"team_name"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
 	}
 
 	teamMap := make(map[int64]TeamInfo)
-	if result.Data != nil {
-		for _, item := range result.Data.Items {
+	if result != nil {
+		for _, item := range result.Items {
 			teamMap[item.TeamID] = TeamInfo{
 				TeamID:   item.TeamID,
 				TeamName: item.TeamName,
@@ -263,35 +195,19 @@ func (c *Client) fetchScheduleInfos(ctx context.Context, scheduleIDs []int64) (m
 		"schedule_ids": uniqueIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/schedule/infos", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			ID   *int64  `json:"id"`
+			Name *string `json:"name"`
+		} `json:"items"`
+	}](c, ctx, "/schedule/infos", requestBody, "unable to fetch schedule information")
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch schedule information: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				ID   *int64  `json:"id"`
-				Name *string `json:"name"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
 	}
 
 	scheduleMap := make(map[int64]ScheduleInfo)
-	if result.Data != nil {
-		for _, item := range result.Data.Items {
+	if result != nil {
+		for _, item := range result.Items {
 			if item.ID != nil {
 				info := ScheduleInfo{ScheduleID: *item.ID}
 				if item.Name != nil {
@@ -330,37 +246,21 @@ func (c *Client) fetchChannelInfos(ctx context.Context, channelIDs []int64) (map
 		"channel_ids": uniqueIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/channel/infos", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			ChannelID   int64  `json:"channel_id"`
+			ChannelName string `json:"channel_name"`
+			TeamID      int64  `json:"team_id,omitempty"`
+			CreatorID   int64  `json:"creator_id,omitempty"`
+		} `json:"items"`
+	}](c, ctx, "/channel/infos", requestBody, "unable to fetch channel information")
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch channel information: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				ChannelID   int64  `json:"channel_id"`
-				ChannelName string `json:"channel_name"`
-				TeamID      int64  `json:"team_id,omitempty"`
-				CreatorID   int64  `json:"creator_id,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
 	}
 
 	channelMap := make(map[int64]ChannelInfo)
-	if result.Data != nil {
-		for _, item := range result.Data.Items {
+	if result != nil {
+		for _, item := range result.Items {
 			channelMap[item.ChannelID] = ChannelInfo{
 				ChannelID:   item.ChannelID,
 				ChannelName: item.ChannelName,

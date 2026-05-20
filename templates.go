@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"slices"
 )
 
@@ -78,30 +77,14 @@ func (c *Client) GetPresetTemplate(ctx context.Context, input *GetPresetTemplate
 		"id": PresetTemplateID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/template/info", requestBody)
+	result, err := postData[map[string]interface{}](c, ctx, "/template/info", requestBody, "failed to fetch preset template")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch preset template: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError             `json:"error,omitempty"`
-		Data  map[string]interface{} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	templateCode := ""
-	if result.Data != nil {
-		if val, ok := result.Data[fieldName]; ok {
+	if result != nil {
+		if val, ok := (*result)[fieldName]; ok {
 			if str, ok := val.(string); ok {
 				templateCode = str
 			}
@@ -154,38 +137,22 @@ func (c *Client) ValidateTemplate(ctx context.Context, input *ValidateTemplateIn
 		requestBody["incident_id"] = input.IncidentID
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/template/preview", requestBody)
+	result, err := postOptionalData[struct {
+		Success bool   `json:"success"`
+		Content string `json:"content"`
+		Message string `json:"message"`
+	}](c, ctx, "/template/preview", requestBody, "failed to validate template")
 	if err != nil {
-		return nil, fmt.Errorf("failed to validate template: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Success bool   `json:"success"`
-			Content string `json:"content"`
-			Message string `json:"message"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	success := false
 	renderedPreview := ""
 	errorMessage := ""
-	if result.Data != nil {
-		success = result.Data.Success
-		renderedPreview = result.Data.Content
-		errorMessage = result.Data.Message
+	if result != nil {
+		success = result.Success
+		renderedPreview = result.Content
+		errorMessage = result.Message
 	}
 
 	renderedSize := len(renderedPreview)

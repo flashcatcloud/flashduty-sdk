@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -39,32 +38,16 @@ func (c *Client) ListAlertEvents(ctx context.Context, input *ListAlertEventsInpu
 		"alert_id": input.AlertID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/event/list", requestBody)
+	result, err := postData[struct {
+		Items []AlertEvent `json:"items"`
+	}](c, ctx, "/alert/event/list", requestBody, "failed to list alert events")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list alert events: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []AlertEvent `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	events := []AlertEvent{}
-	if result.Data != nil {
-		events = result.Data.Items
+	if result != nil {
+		events = result.Items
 	}
 
 	return &ListAlertEventsOutput{
@@ -154,41 +137,25 @@ func (c *Client) ListAlerts(ctx context.Context, input *ListAlertsInput) (*ListA
 		requestBody["search_after_ctx"] = input.SearchAfterCtx
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/list", requestBody)
+	result, err := postData[struct {
+		Items          []Alert `json:"items"`
+		Total          int     `json:"total"`
+		HasNextPage    bool    `json:"has_next_page"`
+		SearchAfterCtx string  `json:"search_after_ctx,omitempty"`
+	}](c, ctx, "/alert/list", requestBody, "failed to list alerts")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list alerts: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items          []Alert `json:"items"`
-			Total          int     `json:"total"`
-			HasNextPage    bool    `json:"has_next_page"`
-			SearchAfterCtx string  `json:"search_after_ctx,omitempty"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	alerts := []Alert{}
 	total := 0
 	hasNextPage := false
 	searchAfterCtx := ""
-	if result.Data != nil {
-		alerts = result.Data.Items
-		total = result.Data.Total
-		hasNextPage = result.Data.HasNextPage
-		searchAfterCtx = result.Data.SearchAfterCtx
+	if result != nil {
+		alerts = result.Items
+		total = result.Total
+		hasNextPage = result.HasNextPage
+		searchAfterCtx = result.SearchAfterCtx
 	}
 
 	return &ListAlertsOutput{
@@ -219,32 +186,16 @@ func (c *Client) GetAlertDetail(ctx context.Context, input *GetAlertDetailInput)
 		"alert_id": input.AlertID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/info", requestBody)
+	alert, err := postOptionalData[Alert](c, ctx, "/alert/info", requestBody, "failed to get alert detail")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get alert detail: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *Alert     `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil {
+	if alert == nil {
 		return nil, fmt.Errorf("alert not found: %s", input.AlertID)
 	}
 
-	return &GetAlertDetailOutput{Alert: *result.Data}, nil
+	return &GetAlertDetailOutput{Alert: *alert}, nil
 }
 
 // ListAlertsByIDs fetches alerts by their IDs
@@ -253,32 +204,16 @@ func (c *Client) ListAlertsByIDs(ctx context.Context, alertIDs []string) (*ListA
 		"alert_ids": alertIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/list-by-ids", requestBody)
+	result, err := postData[struct {
+		Items []Alert `json:"items"`
+	}](c, ctx, "/alert/list-by-ids", requestBody, "failed to list alerts by IDs")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list alerts by IDs: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []Alert `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	alerts := []Alert{}
-	if result.Data != nil {
-		alerts = result.Data.Items
+	if result != nil {
+		alerts = result.Items
 	}
 
 	return &ListAlertsOutput{
@@ -312,25 +247,7 @@ func (c *Client) MergeAlertsToIncident(ctx context.Context, input *MergeAlertsIn
 		requestBody["title"] = input.Title
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/merge", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to merge alerts to incident: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/alert/merge", requestBody, "failed to merge alerts to incident")
 }
 
 // GetAlertFeedInput contains parameters for getting alert feed/timeline
@@ -373,31 +290,15 @@ func (c *Client) GetAlertFeed(ctx context.Context, input *GetAlertFeedInput) (*G
 		requestBody["types"] = input.Types
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert/feed", requestBody)
+	result, err := postData[struct {
+		Items       []RawTimelineItem `json:"items"`
+		HasNextPage bool              `json:"has_next_page"`
+	}](c, ctx, "/alert/feed", requestBody, "failed to get alert feed")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get alert feed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items       []RawTimelineItem `json:"items"`
-			HasNextPage bool              `json:"has_next_page"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if result == nil || len(result.Items) == 0 {
 		return &GetAlertFeedOutput{
 			Items:       []TimelineEvent{},
 			HasNextPage: false,
@@ -405,17 +306,17 @@ func (c *Client) GetAlertFeed(ctx context.Context, input *GetAlertFeedInput) (*G
 	}
 
 	// Enrich with person names
-	personIDs := collectTimelinePersonIDs(result.Data.Items)
+	personIDs := collectTimelinePersonIDs(result.Items)
 	personMap, err := c.fetchPersonInfos(ctx, personIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load person details for feed: %w", err)
 	}
 
-	enrichedItems := enrichTimelineItems(result.Data.Items, personMap)
+	enrichedItems := enrichTimelineItems(result.Items, personMap)
 
 	return &GetAlertFeedOutput{
 		Items:       enrichedItems,
-		HasNextPage: result.Data.HasNextPage,
+		HasNextPage: result.HasNextPage,
 	}, nil
 }
 
@@ -481,41 +382,25 @@ func (c *Client) ListAlertEventsGlobal(ctx context.Context, input *ListAlertEven
 		requestBody["search_after_ctx"] = input.SearchAfterCtx
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/alert-event/list", requestBody)
+	result, err := postData[struct {
+		Items          []AlertEvent `json:"items"`
+		Total          int          `json:"total"`
+		HasNextPage    bool         `json:"has_next_page"`
+		SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
+	}](c, ctx, "/alert-event/list", requestBody, "failed to list alert events")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list alert events: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items          []AlertEvent `json:"items"`
-			Total          int          `json:"total"`
-			HasNextPage    bool         `json:"has_next_page"`
-			SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	events := []AlertEvent{}
 	total := 0
 	hasNextPage := false
 	searchAfterCtx := ""
-	if result.Data != nil {
-		events = result.Data.Items
-		total = result.Data.Total
-		hasNextPage = result.Data.HasNextPage
-		searchAfterCtx = result.Data.SearchAfterCtx
+	if result != nil {
+		events = result.Items
+		total = result.Total
+		hasNextPage = result.HasNextPage
+		searchAfterCtx = result.SearchAfterCtx
 	}
 
 	return &ListAlertEventsGlobalOutput{

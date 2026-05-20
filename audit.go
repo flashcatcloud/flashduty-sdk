@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // SearchAuditLogsInput contains parameters for searching audit logs
@@ -102,38 +101,22 @@ func (c *Client) SearchAuditLogs(ctx context.Context, input *SearchAuditLogsInpu
 		requestBody["is_write"] = *input.IsWrite
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/audit/search", requestBody)
+	result, err := postData[struct {
+		Docs           []AuditLogRecord `json:"docs"`
+		Total          int64            `json:"total"`
+		SearchAfterCtx string           `json:"search_after_ctx"`
+	}](c, ctx, "/audit/search", requestBody, "failed to search audit logs")
 	if err != nil {
-		return nil, fmt.Errorf("failed to search audit logs: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Docs           []AuditLogRecord `json:"docs"`
-			Total          int64            `json:"total"`
-			SearchAfterCtx string           `json:"search_after_ctx"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	logs := []AuditLogRecord{}
 	total := int64(0)
 	searchAfterCtx := ""
-	if result.Data != nil {
-		logs = result.Data.Docs
-		total = result.Data.Total
-		searchAfterCtx = result.Data.SearchAfterCtx
+	if result != nil {
+		logs = result.Docs
+		total = result.Total
+		searchAfterCtx = result.SearchAfterCtx
 	}
 
 	return &SearchAuditLogsOutput{
