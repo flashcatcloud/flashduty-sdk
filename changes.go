@@ -2,8 +2,6 @@ package flashduty
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -60,42 +58,26 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 		requestBody["type"] = input.Type
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/change/list", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			ChangeID    string            `json:"change_id"`
+			Title       string            `json:"title"`
+			Description string            `json:"description,omitempty"`
+			Type        string            `json:"type,omitempty"`
+			Status      string            `json:"status,omitempty"`
+			ChannelID   int64             `json:"channel_id,omitempty"`
+			CreatorID   int64             `json:"creator_id,omitempty"`
+			StartTime   int64             `json:"start_time,omitempty"`
+			EndTime     int64             `json:"end_time,omitempty"`
+			Labels      map[string]string `json:"labels,omitempty"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}](c, ctx, "/change/list", requestBody, "failed to query changes")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query changes: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				ChangeID    string            `json:"change_id"`
-				Title       string            `json:"title"`
-				Description string            `json:"description,omitempty"`
-				Type        string            `json:"type,omitempty"`
-				Status      string            `json:"status,omitempty"`
-				ChannelID   int64             `json:"channel_id,omitempty"`
-				CreatorID   int64             `json:"creator_id,omitempty"`
-				StartTime   int64             `json:"start_time,omitempty"`
-				EndTime     int64             `json:"end_time,omitempty"`
-				Labels      map[string]string `json:"labels,omitempty"`
-			} `json:"items"`
-			Total int `json:"total"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if len(result.Items) == 0 {
 		return &ListChangesOutput{
 			Changes: []Change{},
 			Total:   0,
@@ -105,7 +87,7 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 	// Collect IDs for enrichment
 	channelIDs := make([]int64, 0)
 	personIDs := make([]int64, 0)
-	for _, item := range result.Data.Items {
+	for _, item := range result.Items {
 		if item.ChannelID != 0 {
 			channelIDs = append(channelIDs, item.ChannelID)
 		}
@@ -132,8 +114,8 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 	_ = g.Wait()
 
 	// Build enriched changes
-	changes := make([]Change, 0, len(result.Data.Items))
-	for _, item := range result.Data.Items {
+	changes := make([]Change, 0, len(result.Items))
+	for _, item := range result.Items {
 		change := Change{
 			ChangeID:    item.ChangeID,
 			Title:       item.Title,
@@ -163,6 +145,6 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 
 	return &ListChangesOutput{
 		Changes: changes,
-		Total:   result.Data.Total,
+		Total:   result.Total,
 	}, nil
 }

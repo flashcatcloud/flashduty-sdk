@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // QueryNotificationTrendInput contains parameters for querying notification trends
@@ -45,32 +44,16 @@ func (c *Client) QueryNotificationTrend(ctx context.Context, input *QueryNotific
 		requestBody["channel_ids"] = input.ChannelIDs
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/report/oncall/notifications", requestBody)
+	result, err := postData[struct {
+		Items []NotificationTrendPoint `json:"items"`
+	}](c, ctx, "/report/oncall/notifications", requestBody, "failed to query notification trend")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query notification trend: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []NotificationTrendPoint `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	dataPoints := []NotificationTrendPoint{}
-	if result.Data != nil {
-		dataPoints = result.Data.Items
+	if result != nil {
+		dataPoints = result.Items
 	}
 
 	return &QueryNotificationTrendOutput{DataPoints: dataPoints}, nil
@@ -110,32 +93,16 @@ func (c *Client) QueryChangeTrend(ctx context.Context, input *QueryChangeTrendIn
 		"end_time":   input.EndTime,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/report/oncall/changes", requestBody)
+	result, err := postData[struct {
+		Items []ChangeTrendPoint `json:"items"`
+	}](c, ctx, "/report/oncall/changes", requestBody, "failed to query change trend")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query change trend: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []ChangeTrendPoint `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	dataPoints := []ChangeTrendPoint{}
-	if result.Data != nil {
-		dataPoints = result.Data.Items
+	if result != nil {
+		dataPoints = result.Items
 	}
 
 	return &QueryChangeTrendOutput{DataPoints: dataPoints}, nil

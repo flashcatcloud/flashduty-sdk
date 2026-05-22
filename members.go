@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 const defaultMembersQueryLimit = 20
@@ -62,29 +61,21 @@ func (c *Client) ListMembers(ctx context.Context, input *ListMembersInput) (*Lis
 		requestBody["query"] = input.Email
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/member/list", requestBody)
+	result, err := postOptionalData[struct {
+		P     int          `json:"p"`
+		Limit int          `json:"limit"`
+		Total int          `json:"total"`
+		Items []MemberItem `json:"items"`
+	}](c, ctx, "/member/list", requestBody, "unable to list members")
 	if err != nil {
-		return nil, fmt.Errorf("unable to list members: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result MemberListResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	members := []MemberItem{}
 	total := 0
-	if result.Data != nil {
-		members = result.Data.Items
-		total = result.Data.Total
+	if result != nil {
+		members = result.Items
+		total = result.Total
 	}
 
 	return &ListMembersOutput{

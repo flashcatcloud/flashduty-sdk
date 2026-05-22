@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // ListSchedulesWithSlotsInput contains parameters for listing schedules with computed slots
@@ -188,35 +187,19 @@ func (c *Client) ListSchedulesWithSlots(ctx context.Context, input *ListSchedule
 		requestBody["team_ids"] = teamIDs
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/schedule/list", requestBody)
+	result, err := postData[struct {
+		Items []ScheduleDetail `json:"items"`
+		Total int64            `json:"total"`
+	}](c, ctx, "/schedule/list", requestBody, "failed to list schedules")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list schedules: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []ScheduleDetail `json:"items"`
-			Total int64            `json:"total"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	schedules := []ScheduleDetail{}
 	total := int64(0)
-	if result.Data != nil {
-		schedules = result.Data.Items
-		total = result.Data.Total
+	if result != nil {
+		schedules = result.Items
+		total = result.Total
 	}
 
 	return &ListSchedulesWithSlotsOutput{
@@ -255,30 +238,14 @@ func (c *Client) GetScheduleDetail(ctx context.Context, input *GetScheduleDetail
 		"end":         input.End,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/schedule/info", requestBody)
+	schedule, err := postOptionalData[ScheduleDetail](c, ctx, "/schedule/info", requestBody, "failed to get schedule detail")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get schedule detail: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError      `json:"error,omitempty"`
-		Data  *ScheduleDetail `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil {
+	if schedule == nil {
 		return nil, fmt.Errorf("schedule not found: %d", input.ScheduleID)
 	}
 
-	return &GetScheduleDetailOutput{Schedule: *result.Data}, nil
+	return &GetScheduleDetailOutput{Schedule: *schedule}, nil
 }

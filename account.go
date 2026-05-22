@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 // AccountInfo contains account details returned by the account info API.
@@ -20,33 +19,15 @@ type AccountInfo struct {
 	CreatedAt   int64  `json:"created_at"`
 }
 
-type accountInfoResponse struct {
-	Error *DutyError   `json:"error,omitempty"`
-	Data  *AccountInfo `json:"data,omitempty"`
-}
-
 // GetAccountInfo retrieves the account information for the authenticated app key.
 func (c *Client) GetAccountInfo(ctx context.Context) (*AccountInfo, error) {
-	resp, err := c.makeRequest(ctx, "POST", "/account/info", map[string]any{})
+	data, err := postOptionalData[AccountInfo](c, ctx, "/account/info", map[string]any{}, "unable to get account info")
 	if err != nil {
-		return nil, fmt.Errorf("unable to get account info: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result accountInfoResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
+	if data == nil {
 		return nil, fmt.Errorf("empty account info in response")
 	}
 
-	return result.Data, nil
+	return data, nil
 }

@@ -2,9 +2,7 @@ package flashduty
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"net/http"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -65,31 +63,15 @@ func (c *Client) ListEscalationRules(ctx context.Context, channelID int64) (*Lis
 		"channel_id": channelID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/channel/escalate/rule/list", requestBody)
+	result, err := postData[struct {
+		Items []rawEscalationRule `json:"items"`
+	}](c, ctx, "/channel/escalate/rule/list", requestBody, "unable to query escalation rules")
 	if err != nil {
-		return nil, fmt.Errorf("unable to query escalation rules: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []rawEscalationRule `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	rules := []EscalationRule{}
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if len(result.Items) == 0 {
 		return &ListEscalationRulesOutput{
 			Rules: rules,
 			Total: 0,
@@ -101,7 +83,7 @@ func (c *Client) ListEscalationRules(ctx context.Context, channelID int64) (*Lis
 	teamIDs := make([]int64, 0)
 	scheduleIDs := make([]int64, 0)
 
-	for _, r := range result.Data.Items {
+	for _, r := range result.Items {
 		for _, l := range r.Layers {
 			if l.Target == nil {
 				continue
@@ -172,7 +154,7 @@ func (c *Client) ListEscalationRules(ctx context.Context, channelID int64) (*Lis
 	_ = g.Wait()
 
 	// Build enriched rules
-	for _, r := range result.Data.Items {
+	for _, r := range result.Items {
 		rule := EscalationRule{
 			RuleID:      r.RuleID,
 			RuleName:    r.RuleName,

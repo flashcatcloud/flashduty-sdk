@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 )
 
 const defaultTeamsQueryLimit = 20
@@ -33,36 +32,20 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 			"team_ids": input.TeamIDs,
 		}
 
-		resp, err := c.makeRequest(ctx, "POST", "/team/infos", requestBody)
+		result, err := postData[struct {
+			Items []struct {
+				TeamID    int64   `json:"team_id"`
+				TeamName  string  `json:"team_name"`
+				PersonIDs []int64 `json:"person_ids"`
+			} `json:"items"`
+		}](c, ctx, "/team/infos", requestBody, "unable to retrieve teams")
 		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve teams: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, handleAPIError(c.logger, resp)
-		}
-
-		var result struct {
-			Error *DutyError `json:"error,omitempty"`
-			Data  *struct {
-				Items []struct {
-					TeamID    int64   `json:"team_id"`
-					TeamName  string  `json:"team_name"`
-					PersonIDs []int64 `json:"person_ids"`
-				} `json:"items"`
-			} `json:"data,omitempty"`
-		}
-		if err := parseResponse(c.logger, resp, &result); err != nil {
 			return nil, err
-		}
-		if result.Error != nil {
-			return nil, result.Error
 		}
 
 		teams := []TeamInfo{}
-		if result.Data != nil {
-			for _, t := range result.Data.Items {
+		if result != nil {
+			for _, t := range result.Items {
 				teams = append(teams, TeamInfo{
 					TeamID:    t.TeamID,
 					TeamName:  t.TeamName,
@@ -111,45 +94,29 @@ func (c *Client) ListTeams(ctx context.Context, input *ListTeamsInput) (*ListTea
 		requestBody["person_id"] = input.PersonID
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/team/list", requestBody)
+	result, err := postData[struct {
+		Items []struct {
+			TeamID    int64   `json:"team_id"`
+			TeamName  string  `json:"team_name"`
+			PersonIDs []int64 `json:"person_ids"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}](c, ctx, "/team/list", requestBody, "unable to list teams")
 	if err != nil {
-		return nil, fmt.Errorf("unable to list teams: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				TeamID    int64   `json:"team_id"`
-				TeamName  string  `json:"team_name"`
-				PersonIDs []int64 `json:"person_ids"`
-			} `json:"items"`
-			Total int `json:"total"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	teams := []TeamInfo{}
 	total := 0
-	if result.Data != nil {
-		for _, t := range result.Data.Items {
+	if result != nil {
+		for _, t := range result.Items {
 			teams = append(teams, TeamInfo{
 				TeamID:    t.TeamID,
 				TeamName:  t.TeamName,
 				PersonIDs: t.PersonIDs,
 			})
 		}
-		total = result.Data.Total
+		total = result.Total
 	}
 
 	c.enrichTeamMembers(ctx, teams)
@@ -207,31 +174,13 @@ func (c *Client) GetTeamInfo(ctx context.Context, input *TeamGetInput) (*TeamIte
 		infoBody["ref_id"] = input.RefID
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/team/info", infoBody)
+	team, err := postOptionalData[TeamItem](c, ctx, "/team/info", infoBody, "unable to get team info")
 	if err != nil {
-		return nil, fmt.Errorf("unable to get team info: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *TeamItem  `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
+	if team == nil {
 		return nil, fmt.Errorf("team not found")
 	}
-
-	team := result.Data
 
 	// Collect all person IDs that need enrichment: members + creator (if name missing).
 	enrichIDs := make([]int64, 0, len(team.PersonIDs)+1)
@@ -303,31 +252,15 @@ func (c *Client) UpsertTeam(ctx context.Context, input *TeamUpsertInput) (*TeamU
 		requestBody["reset_if_name_exist"] = true
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/team/upsert", requestBody)
+	result, err := postOptionalData[TeamUpsertOutput](c, ctx, "/team/upsert", requestBody, "unable to upsert team")
 	if err != nil {
-		return nil, fmt.Errorf("unable to upsert team: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError       `json:"error,omitempty"`
-		Data  *TeamUpsertOutput `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
+	if result == nil {
 		return nil, fmt.Errorf("unexpected empty response from team upsert")
 	}
 
-	return result.Data, nil
+	return result, nil
 }
 
 // DeleteTeam permanently deletes a team by ID, name, or ref_id.
@@ -343,25 +276,5 @@ func (c *Client) DeleteTeam(ctx context.Context, input *TeamDeleteInput) error {
 		requestBody["ref_id"] = input.RefID
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/team/delete", requestBody)
-	if err != nil {
-		return fmt.Errorf("unable to delete team: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/team/delete", requestBody, "unable to delete team")
 }

@@ -3,7 +3,6 @@ package flashduty
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -20,9 +19,9 @@ type ListIncidentsInput struct {
 	// a non-zero ChannelID is wrapped into a single-element ChannelIDs slice.
 	// The backend /incident/list endpoint expects channel_ids (array) — singular
 	// channel_id is silently ignored.
-	ChannelID     int64
-	StartTime     int64 // Unix timestamp (seconds), required if no IncidentIDs
-	EndTime       int64 // Unix timestamp (seconds), required if no IncidentIDs
+	ChannelID int64
+	StartTime int64 // Unix timestamp (seconds), required if no IncidentIDs
+	EndTime   int64 // Unix timestamp (seconds), required if no IncidentIDs
 	// Query is the backend's full-text search field on /incident/list. It
 	// searches across title/labels/content via Doris and also resolves a 24-char
 	// ObjectID to incident_ids and a 6-char string to a num lookup. Prefer this
@@ -236,45 +235,29 @@ func (c *Client) ListSimilarIncidents(ctx context.Context, incidentID string, li
 		"limit":       limit,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/past/list", requestBody)
+	result, err := postData[struct {
+		Items []RawIncident `json:"items"`
+		Total int           `json:"total"`
+	}](c, ctx, "/incident/past/list", requestBody, "unable to find similar incidents")
 	if err != nil {
-		return nil, fmt.Errorf("unable to find similar incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []RawIncident `json:"items"`
-			Total int           `json:"total"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if result == nil || len(result.Items) == 0 {
 		return &ListIncidentsOutput{
 			Incidents: []EnrichedIncident{},
 			Total:     0,
 		}, nil
 	}
 
-	enrichedIncidents, err := c.enrichIncidents(ctx, result.Data.Items)
+	enrichedIncidents, err := c.enrichIncidents(ctx, result.Items)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load additional incident details: %w", err)
 	}
 
 	return &ListIncidentsOutput{
 		Incidents: enrichedIncidents,
-		Total:     result.Data.Total,
+		Total:     result.Total,
 	}, nil
 }
 
@@ -306,21 +289,15 @@ func (c *Client) CreateIncident(ctx context.Context, input *CreateIncidentInput)
 		}
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/create", requestBody)
+	data, err := postData[any](c, ctx, "/incident/create", requestBody, "failed to create incident")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create incident: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
+	if data == nil {
+		return nil, nil
 	}
 
-	return result.Data, nil
+	return *data, nil
 }
 
 // UpdateIncidentInput contains parameters for updating an incident
@@ -374,20 +351,8 @@ func (c *Client) UpdateIncident(ctx context.Context, input *UpdateIncidentInput)
 	}
 
 	if len(resetBody) > 1 {
-		resp, err := c.makeRequest(ctx, "POST", "/incident/reset", resetBody)
-		if err != nil {
-			return nil, fmt.Errorf("unable to update incident: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode != http.StatusOK {
-			return nil, handleAPIError(c.logger, resp)
-		}
-		var result FlashdutyResponse
-		if err := parseResponse(c.logger, resp, &result); err != nil {
+		if err := postEmpty(c, ctx, "/incident/reset", resetBody, "unable to update incident"); err != nil {
 			return nil, err
-		}
-		if result.Error != nil {
-			return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
 		}
 	}
 
@@ -422,25 +387,7 @@ func (c *Client) AckIncidents(ctx context.Context, incidentIDs []string) error {
 		"incident_ids": incidentIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/ack", requestBody)
-	if err != nil {
-		return fmt.Errorf("unable to acknowledge incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/ack", requestBody, "unable to acknowledge incidents")
 }
 
 // CloseIncidents closes (resolves) one or more incidents
@@ -449,25 +396,7 @@ func (c *Client) CloseIncidents(ctx context.Context, incidentIDs []string) error
 		"incident_ids": incidentIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/resolve", requestBody)
-	if err != nil {
-		return fmt.Errorf("unable to close incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/resolve", requestBody, "unable to close incidents")
 }
 
 // fetchIncidentsByIDs fetches incidents by their IDs
@@ -476,32 +405,16 @@ func (c *Client) fetchIncidentsByIDs(ctx context.Context, incidentIDs []string) 
 		"incident_ids": incidentIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/list-by-ids", requestBody)
+	result, err := postData[struct {
+		Items []RawIncident `json:"items"`
+	}](c, ctx, "/incident/list-by-ids", requestBody, "unable to fetch incidents by IDs")
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []RawIncident `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-	if result.Data == nil {
+	if result == nil {
 		return nil, nil
 	}
-	return result.Data.Items, nil
+	return result.Items, nil
 }
 
 // fetchIncidentsByFilters fetches incidents by filters
@@ -529,32 +442,16 @@ func (c *Client) fetchIncidentsByFilters(ctx context.Context, progress, severity
 		requestBody["title"] = title
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/list", requestBody)
+	result, err := postData[struct {
+		Items []RawIncident `json:"items"`
+	}](c, ctx, "/incident/list", requestBody, "unable to fetch incidents")
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []RawIncident `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return nil, err
-	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-	if result.Data == nil {
+	if result == nil {
 		return nil, nil
 	}
-	return result.Data.Items, nil
+	return result.Items, nil
 }
 
 // GetIncidentDetailInput contains parameters for getting incident detail
@@ -577,32 +474,16 @@ func (c *Client) GetIncidentDetail(ctx context.Context, input *GetIncidentDetail
 		"incident_id": input.IncidentID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/info", requestBody)
+	incident, err := postOptionalData[IncidentDetail](c, ctx, "/incident/info", requestBody, "failed to get incident detail")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get incident detail: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError      `json:"error,omitempty"`
-		Data  *IncidentDetail `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil {
+	if incident == nil {
 		return nil, fmt.Errorf("incident not found: %s", input.IncidentID)
 	}
 
-	return &GetIncidentDetailOutput{Incident: *result.Data}, nil
+	return &GetIncidentDetailOutput{Incident: *incident}, nil
 }
 
 // GetIncidentFeedInput contains parameters for getting incident feed/timeline
@@ -641,31 +522,15 @@ func (c *Client) GetIncidentFeed(ctx context.Context, input *GetIncidentFeedInpu
 		"asc":         input.Asc,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/feed", requestBody)
+	result, err := postData[struct {
+		Items       []RawTimelineItem `json:"items"`
+		HasNextPage bool              `json:"has_next_page"`
+	}](c, ctx, "/incident/feed", requestBody, "failed to get incident feed")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get incident feed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items       []RawTimelineItem `json:"items"`
-			HasNextPage bool              `json:"has_next_page"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if result == nil || len(result.Items) == 0 {
 		return &GetIncidentFeedOutput{
 			Items:       []TimelineEvent{},
 			HasNextPage: false,
@@ -673,17 +538,17 @@ func (c *Client) GetIncidentFeed(ctx context.Context, input *GetIncidentFeedInpu
 	}
 
 	// Enrich with person names
-	personIDs := collectTimelinePersonIDs(result.Data.Items)
+	personIDs := collectTimelinePersonIDs(result.Items)
 	personMap, err := c.fetchPersonInfos(ctx, personIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load person details for feed: %w", err)
 	}
 
-	enrichedItems := enrichTimelineItems(result.Data.Items, personMap)
+	enrichedItems := enrichTimelineItems(result.Items, personMap)
 
 	return &GetIncidentFeedOutput{
 		Items:       enrichedItems,
-		HasNextPage: result.Data.HasNextPage,
+		HasNextPage: result.HasNextPage,
 	}, nil
 }
 
@@ -756,41 +621,25 @@ func (c *Client) ListPostMortems(ctx context.Context, input *ListPostMortemsInpu
 		requestBody["search_after_ctx"] = input.SearchAfterCtx
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/post-mortem/list", requestBody)
+	result, err := postData[struct {
+		Items          []PostMortem `json:"items"`
+		Total          int          `json:"total"`
+		HasNextPage    bool         `json:"has_next_page"`
+		SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
+	}](c, ctx, "/incident/post-mortem/list", requestBody, "failed to list post-mortems")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list post-mortems: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items          []PostMortem `json:"items"`
-			Total          int          `json:"total"`
-			HasNextPage    bool         `json:"has_next_page"`
-			SearchAfterCtx string       `json:"search_after_ctx,omitempty"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	postMortems := []PostMortem{}
 	total := 0
 	hasNextPage := false
 	searchAfterCtx := ""
-	if result.Data != nil {
-		postMortems = result.Data.Items
-		total = result.Data.Total
-		hasNextPage = result.Data.HasNextPage
-		searchAfterCtx = result.Data.SearchAfterCtx
+	if result != nil {
+		postMortems = result.Items
+		total = result.Total
+		hasNextPage = result.HasNextPage
+		searchAfterCtx = result.SearchAfterCtx
 	}
 
 	return &ListPostMortemsOutput{
@@ -809,24 +658,7 @@ func (c *Client) updateCustomField(ctx context.Context, incidentID, fieldName st
 		"field_value": fieldValue,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/field/reset", requestBody)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return fmt.Errorf("API error: %s - %s", result.Error.Code, result.Error.Message)
-	}
-	return nil
+	return postEmpty(c, ctx, "/incident/field/reset", requestBody, "failed to update custom field")
 }
 
 // MergeIncidentsInput contains parameters for merging incidents
@@ -846,25 +678,7 @@ func (c *Client) MergeIncidents(ctx context.Context, input *MergeIncidentsInput)
 		"target_incident_id":  input.TargetIncidentID,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/merge", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to merge incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/merge", requestBody, "failed to merge incidents")
 }
 
 // SnoozeIncidentsInput contains parameters for snoozing incidents
@@ -884,25 +698,7 @@ func (c *Client) SnoozeIncidents(ctx context.Context, input *SnoozeIncidentsInpu
 		"minutes":      input.Minutes,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/snooze", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to snooze incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/snooze", requestBody, "failed to snooze incidents")
 }
 
 // ReopenIncidents reopens one or more closed incidents
@@ -911,25 +707,7 @@ func (c *Client) ReopenIncidents(ctx context.Context, incidentIDs []string) erro
 		"incident_ids": incidentIDs,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/reopen", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to reopen incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/reopen", requestBody, "failed to reopen incidents")
 }
 
 // ReassignIncidentsInput contains parameters for reassigning incidents
@@ -952,23 +730,5 @@ func (c *Client) ReassignIncidents(ctx context.Context, input *ReassignIncidents
 		},
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/incident/assign", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to reassign incidents: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/incident/assign", requestBody, "failed to reassign incidents")
 }

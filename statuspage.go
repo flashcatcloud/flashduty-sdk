@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,39 +13,23 @@ import (
 
 // ListStatusPages queries status pages, optionally filtering by page IDs
 func (c *Client) ListStatusPages(ctx context.Context, pageIDs []int64) ([]StatusPage, error) {
-	resp, err := c.makeRequest(ctx, "GET", "/status-page/list", nil)
+	result, err := getData[struct {
+		Items []struct {
+			PageID      int64  `json:"page_id"`
+			PageName    string `json:"name"`
+			URLName     string `json:"url_name,omitempty"`
+			Description string `json:"description,omitempty"`
+			Components  []struct {
+				ComponentID string `json:"component_id"`
+				Name        string `json:"name"`
+			} `json:"components,omitempty"`
+		} `json:"items"`
+	}](c, ctx, "/status-page/list", "failed to list status pages")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list status pages: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []struct {
-				PageID      int64  `json:"page_id"`
-				PageName    string `json:"name"`
-				URLName     string `json:"url_name,omitempty"`
-				Description string `json:"description,omitempty"`
-				Components  []struct {
-					ComponentID string `json:"component_id"`
-					Name        string `json:"name"`
-				} `json:"components,omitempty"`
-			} `json:"items"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
 
-	if result.Data == nil || len(result.Data.Items) == 0 {
+	if result == nil || len(result.Items) == 0 {
 		return []StatusPage{}, nil
 	}
 
@@ -57,7 +40,7 @@ func (c *Client) ListStatusPages(ctx context.Context, pageIDs []int64) ([]Status
 	}
 
 	pages := make([]StatusPage, 0)
-	for _, item := range result.Data.Items {
+	for _, item := range result.Items {
 		if len(pageIDs) > 0 {
 			if _, ok := pageIDSet[item.PageID]; !ok {
 				continue
@@ -111,35 +94,19 @@ func (c *Client) ListStatusChanges(ctx context.Context, input *ListStatusChanges
 	params := url.Values{}
 	params.Set("page_id", strconv.FormatInt(input.PageID, 10))
 	params.Set("type", input.ChangeType)
-	resp, err := c.makeRequest(ctx, "GET", "/status-page/change/active/list?"+params.Encode(), nil)
+	result, err := getData[struct {
+		Items []StatusChange `json:"items"`
+		Total int            `json:"total"`
+	}](c, ctx, "/status-page/change/active/list?"+params.Encode(), "failed to list status changes")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list status changes: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError `json:"error,omitempty"`
-		Data  *struct {
-			Items []StatusChange `json:"items"`
-			Total int            `json:"total"`
-		} `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 
 	changes := []StatusChange{}
 	total := 0
-	if result.Data != nil {
-		changes = result.Data.Items
-		total = result.Data.Total
+	if result != nil {
+		changes = result.Items
+		total = result.Total
 	}
 
 	return &ListStatusChangesOutput{
@@ -211,21 +178,15 @@ func (c *Client) CreateStatusIncident(ctx context.Context, input *CreateStatusIn
 		"notify_subscribers": input.NotifySubscribers,
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/status-page/change/create", requestBody)
+	data, err := postData[any](c, ctx, "/status-page/change/create", requestBody, "failed to create status incident")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create status incident: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
+	if data == nil {
+		return nil, nil
 	}
 
-	return result.Data, nil
+	return *data, nil
 }
 
 // CreateChangeTimelineInput contains parameters for adding a timeline entry
@@ -258,21 +219,7 @@ func (c *Client) CreateChangeTimeline(ctx context.Context, input *CreateChangeTi
 		}
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/status-page/change/timeline/create", requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to create timeline: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	return postEmpty(c, ctx, "/status-page/change/timeline/create", requestBody, "failed to create timeline")
 }
 
 // StartStatusPageMigrationInput contains parameters for starting a status page
@@ -363,31 +310,15 @@ func (c *Client) StartStatusPageEmailSubscriberMigration(ctx context.Context, in
 }
 
 func (c *Client) startStatusPageMigration(ctx context.Context, path string, body map[string]any) (*StartStatusPageMigrationOutput, error) {
-	resp, err := c.makeRequest(ctx, "POST", path, body)
+	result, err := postOptionalData[StartStatusPageMigrationOutput](c, ctx, path, body, "failed to start status page migration")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start status page migration: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError                      `json:"error,omitempty"`
-		Data  *StartStatusPageMigrationOutput `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
+	if result == nil {
 		return nil, errors.New("status page migration response missing data")
 	}
 
-	return result.Data, nil
+	return result, nil
 }
 
 // GetStatusPageMigrationStatus fetches the current state of a status page
@@ -399,31 +330,15 @@ func (c *Client) GetStatusPageMigrationStatus(ctx context.Context, jobID string)
 
 	params := url.Values{}
 	params.Set("job_id", jobID)
-	resp, err := c.makeRequest(ctx, "GET", "/status-page/migration/status?"+params.Encode(), nil)
+	result, err := getOptionalData[StatusPageMigrationJob](c, ctx, "/status-page/migration/status?"+params.Encode(), "failed to get status page migration status")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get status page migration status: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError              `json:"error,omitempty"`
-		Data  *StatusPageMigrationJob `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.Data == nil {
+	if result == nil {
 		return nil, fmt.Errorf("status page migration status response missing data")
 	}
 
-	return result.Data, nil
+	return result, nil
 }
 
 // CancelStatusPageMigration requests cancellation of an in-flight status page
@@ -433,25 +348,7 @@ func (c *Client) CancelStatusPageMigration(ctx context.Context, jobID string) er
 		return errors.New("jobID is required")
 	}
 
-	resp, err := c.makeRequest(ctx, "POST", "/status-page/migration/cancel", map[string]any{
+	return postEmpty(c, ctx, "/status-page/migration/cancel", map[string]any{
 		"job_id": jobID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to cancel status page migration: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return handleAPIError(c.logger, resp)
-	}
-
-	var result FlashdutyResponse
-	if err := parseResponse(c.logger, resp, &result); err != nil {
-		return err
-	}
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+	}, "failed to cancel status page migration")
 }

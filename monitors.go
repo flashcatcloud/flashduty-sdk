@@ -2,8 +2,6 @@ package flashduty
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 )
 
 // QueryMonitorRuleStatusInput contains parameters for querying monitor rule status
@@ -33,31 +31,15 @@ func (c *Client) QueryMonitorRuleStatus(ctx context.Context, input *QueryMonitor
 
 	requestBody := map[string]any{}
 
-	resp, err := c.makeRequest(ctx, "POST", "/monit/rule/counter/status", requestBody)
+	statuses, err := postData[[]MonitorRuleFolderStatus](c, ctx, "/monit/rule/counter/status", requestBody, "failed to query monitor rule status")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query monitor rule status: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, handleAPIError(c.logger, resp)
-	}
-
-	var result struct {
-		Error *DutyError                `json:"error,omitempty"`
-		Data  []MonitorRuleFolderStatus `json:"data,omitempty"`
-	}
-	if err := parseResponse(c.logger, resp, &result); err != nil {
 		return nil, err
 	}
-	if result.Error != nil {
-		return nil, result.Error
+
+	out := []MonitorRuleFolderStatus{}
+	if statuses != nil {
+		out = *statuses
 	}
 
-	statuses := []MonitorRuleFolderStatus{}
-	if result.Data != nil {
-		statuses = result.Data
-	}
-
-	return &QueryMonitorRuleStatusOutput{Statuses: statuses}, nil
+	return &QueryMonitorRuleStatusOutput{Statuses: out}, nil
 }
