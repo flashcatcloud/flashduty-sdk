@@ -25,3 +25,7 @@ Thumbs.db
 
 # Vendor (use go modules)
 vendor/
+
+# Worktrees and tool state
+.worktrees/
+.claude/
