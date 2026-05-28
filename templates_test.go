@@ -136,7 +136,7 @@ func TestGetPresetTemplate(t *testing.T) {
 			if tt.serverResp != nil {
 				ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(tt.serverResp)
+					_ = json.NewEncoder(w).Encode(tt.serverResp)
 				}))
 				defer ts.Close()
 			}
@@ -267,7 +267,7 @@ func TestValidateTemplate(t *testing.T) {
 			if tt.serverResp != nil {
 				ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(tt.serverResp)
+					_ = json.NewEncoder(w).Encode(tt.serverResp)
 				}))
 				defer ts.Close()
 			}

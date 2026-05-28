@@ -154,7 +154,7 @@ func TestClient_CustomLoggerUsedInRequest(t *testing.T) {
 	// httptest server returns a valid JSON response for /team/list.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":{"items":[],"total":0}}`)
+		_, _ = fmt.Fprint(w, `{"data":{"items":[],"total":0}}`)
 	}))
 	defer ts.Close()
 
