@@ -24,11 +24,7 @@ type QueryMonitorRuleStatusOutput struct {
 }
 
 // QueryMonitorRuleStatus queries monitor rule status counts grouped by folder family.
-func (c *Client) QueryMonitorRuleStatus(ctx context.Context, input *QueryMonitorRuleStatusInput) (*QueryMonitorRuleStatusOutput, error) {
-	if input == nil {
-		input = &QueryMonitorRuleStatusInput{}
-	}
-
+func (c *Client) QueryMonitorRuleStatus(ctx context.Context, _ *QueryMonitorRuleStatusInput) (*QueryMonitorRuleStatusOutput, error) {
 	requestBody := map[string]any{}
 
 	statuses, err := postData[[]MonitorRuleFolderStatus](c, ctx, "/monit/rule/counter/status", requestBody, "failed to query monitor rule status")

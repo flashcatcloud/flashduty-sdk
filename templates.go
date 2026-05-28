@@ -168,9 +168,10 @@ func (c *Client) ValidateTemplate(ctx context.Context, input *ValidateTemplateIn
 	if sizeLimit > 0 {
 		if renderedSize > sizeLimit {
 			sizeWarning := fmt.Sprintf("Rendered output is %d bytes, exceeding the %d byte limit for %s.", renderedSize, sizeLimit, input.Channel)
-			if input.Channel == "telegram" {
+			switch input.Channel {
+			case "telegram":
 				sizeWarning += " CRITICAL: Telegram will silently drop this message."
-			} else if input.Channel == "teams_app" {
+			case "teams_app":
 				sizeWarning += " Teams will return an error for this message."
 			}
 			errs = append(errs, sizeWarning)

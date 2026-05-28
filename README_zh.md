@@ -1,23 +1,23 @@
 # Flashduty SDK
 
-English | [中文](README_zh.md)
+[English](README.md) | 中文
 
 [![License](https://img.shields.io/github/license/flashcatcloud/flashduty-sdk?style=flat-square&color=24bfa5&label=License)](LICENSE)
 [![Go Reference](https://img.shields.io/badge/Go-Reference-24bfa5?style=flat-square&logo=go)](https://pkg.go.dev/github.com/flashcatcloud/flashduty-sdk)
 [![CI](https://img.shields.io/github/actions/workflow/status/flashcatcloud/flashduty-sdk/go.yml?style=flat-square&branch=main&label=CI)](https://github.com/flashcatcloud/flashduty-sdk/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/flashcatcloud/flashduty-sdk?style=flat-square)](https://goreportcard.com/report/github.com/flashcatcloud/flashduty-sdk)
 
-Go SDK for the [Flashduty](https://flashcat.cloud) API. Provides typed methods for incident management, on-call scheduling, status pages, notification templates, and more.
+[Flashduty](https://flashcat.cloud) 平台 API 的 Go SDK。提供故障管理、值班排班、状态页、通知模板等能力的类型化方法。
 
-## Installation
+## 安装
 
 ```bash
 go get github.com/flashcatcloud/flashduty-sdk
 ```
 
-Requires Go 1.24+.
+需要 Go 1.24+。
 
-## Quick Start
+## 快速开始
 
 ```go
 package main
@@ -51,7 +51,7 @@ func main() {
 }
 ```
 
-## Client Options
+## 客户端选项
 
 ```go
 client, err := flashduty.NewClient("your-app-key",
@@ -62,33 +62,33 @@ client, err := flashduty.NewClient("your-app-key",
 	flashduty.WithLogger(myLogger),
 	flashduty.WithRequestHeaders(staticHeaders),
 	flashduty.WithRequestHook(func(req *http.Request) {
-		// Inject per-request headers (e.g., W3C Trace Context)
+		// 注入按请求的请求头（例如 W3C Trace Context）
 		req.Header.Set("traceparent", traceID)
 	}),
 )
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `WithBaseURL` | `https://api.flashcat.cloud` | API base URL |
-| `WithTimeout` | `30s` | HTTP client timeout |
-| `WithUserAgent` | `flashduty-go-sdk` | User-Agent header |
-| `WithHTTPClient` | Default `http.Client` | Custom HTTP client |
-| `WithLogger` | `slog`-based logger | Custom logger implementing `Logger` interface |
-| `WithRequestHeaders` | none | Static headers included in every request |
-| `WithRequestHook` | none | Callback invoked on every outgoing request before it is sent |
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `WithBaseURL` | `https://api.flashcat.cloud` | API 地址 |
+| `WithTimeout` | `30s` | HTTP 客户端超时 |
+| `WithUserAgent` | `flashduty-go-sdk` | User-Agent 请求头 |
+| `WithHTTPClient` | 默认 `http.Client` | 自定义 HTTP 客户端 |
+| `WithLogger` | 基于 `slog` 的日志器 | 实现 `Logger` 接口的自定义日志器 |
+| `WithRequestHeaders` | 无 | 每个请求都包含的静态请求头 |
+| `WithRequestHook` | 无 | 每个出站请求发送前调用的回调 |
 
-### Dynamic User-Agent
+### 动态 User-Agent
 
-The User-Agent can be updated after client creation (e.g., per-session):
+创建客户端之后仍可更新 User-Agent（例如按会话）：
 
 ```go
 client.SetUserAgent("my-app/2.0 (client-name/1.2)")
 ```
 
-## Logger Interface
+## 日志接口
 
-The SDK uses a pluggable logger. The default implementation wraps `log/slog`.
+SDK 使用可插拔的日志器，默认实现封装了 `log/slog`。
 
 ```go
 type Logger interface {
@@ -99,7 +99,7 @@ type Logger interface {
 }
 ```
 
-To adapt logrus or other backends:
+适配 logrus 或其他后端：
 
 ```go
 type logrusAdapter struct{ *logrus.Logger }
@@ -120,148 +120,148 @@ func kvToFields(kv []any) logrus.Fields {
 }
 ```
 
-## API Reference
+## API 参考
 
-### Incidents
+### 故障（Incidents）
 
 ```go
-// List incidents by IDs or filters (time-based queries require StartTime and EndTime)
+// 按 ID 或筛选条件列出故障（基于时间的查询需要 StartTime 和 EndTime）
 client.ListIncidents(ctx, &ListIncidentsInput{...}) (*ListIncidentsOutput, error)
 
-// Get timeline events for one or more incidents
+// 获取一个或多个故障的时间线事件
 client.GetIncidentTimelines(ctx, incidentIDs) ([]IncidentTimelineOutput, error)
 
-// Get alerts for one or more incidents
+// 获取一个或多个故障的告警
 client.ListIncidentAlerts(ctx, incidentIDs, limit) ([]IncidentAlertsOutput, error)
 
-// Find similar historical incidents
+// 查找相似的历史故障
 client.ListSimilarIncidents(ctx, incidentID, limit) (*ListIncidentsOutput, error)
 
-// Create a new incident
+// 创建新故障
 client.CreateIncident(ctx, &CreateIncidentInput{...}) (any, error)
 
-// Update incident fields (title, description, severity, custom fields)
+// 更新故障字段（标题、描述、级别、自定义字段）
 client.UpdateIncident(ctx, &UpdateIncidentInput{...}) ([]string, error)
 
-// Acknowledge incidents
+// 认领故障
 client.AckIncidents(ctx, incidentIDs) error
 
-// Close (resolve) incidents
+// 关闭（解决）故障
 client.CloseIncidents(ctx, incidentIDs) error
 ```
 
-### Members
+### 成员（Members）
 
 ```go
-// List members by person IDs, name, or email
+// 按人员 ID、姓名或邮箱列出成员
 client.ListMembers(ctx, &ListMembersInput{...}) (*ListMembersOutput, error)
 ```
 
-### Teams
+### 团队（Teams）
 
 ```go
-// List teams by team IDs or name
+// 按团队 ID 或名称列出团队
 client.ListTeams(ctx, &ListTeamsInput{...}) (*ListTeamsOutput, error)
 ```
 
-### Channels (Collaboration Spaces)
+### 协作空间（Channels）
 
 ```go
-// List channels by IDs or name (name filtering is case-insensitive substring match)
+// 按 ID 或名称列出协作空间（名称匹配为不区分大小写的子串匹配）
 client.ListChannels(ctx, &ListChannelsInput{...}) (*ListChannelsOutput, error)
 ```
 
-### Escalation Rules
+### 分派策略（Escalation Rules）
 
 ```go
-// List escalation rules for a channel (enriched with person/team/schedule names)
+// 列出某协作空间的分派策略（附带人员/团队/排班名称）
 client.ListEscalationRules(ctx, channelID) (*ListEscalationRulesOutput, error)
 ```
 
-### Custom Fields
+### 自定义字段（Custom Fields）
 
 ```go
-// List custom field definitions, optionally filtered by IDs or name
+// 列出自定义字段定义，可按 ID 或名称筛选
 client.ListFields(ctx, &ListFieldsInput{...}) (*ListFieldsOutput, error)
 ```
 
-### Changes
+### 变更记录（Changes）
 
 ```go
-// List change records (deployments, configurations) with enriched names
+// 列出变更记录（部署、配置等），附带解析后的名称
 client.ListChanges(ctx, &ListChangesInput{...}) (*ListChangesOutput, error)
 ```
 
-### Status Pages
+### 状态页（Status Pages）
 
 ```go
-// List status pages, optionally filtered by page IDs
+// 列出状态页，可按页面 ID 筛选
 client.ListStatusPages(ctx, pageIDs) ([]StatusPage, error)
 
-// List active incidents or maintenances on a status page
+// 列出状态页上活跃的事件或维护
 client.ListStatusChanges(ctx, &ListStatusChangesInput{...}) (*ListStatusChangesOutput, error)
 
-// Create an incident on a status page
+// 在状态页上创建事件
 client.CreateStatusIncident(ctx, &CreateStatusIncidentInput{...}) (any, error)
 
-// Add a timeline update to a status page incident or maintenance
+// 为状态页事件或维护添加时间线更新
 client.CreateChangeTimeline(ctx, &CreateChangeTimelineInput{...}) error
 ```
 
-### Templates
+### 通知模板（Templates）
 
 ```go
-// Fetch the preset (default) notification template for a channel
+// 获取某渠道的预设（默认）通知模板
 client.GetPresetTemplate(ctx, &GetPresetTemplateInput{...}) (*GetPresetTemplateOutput, error)
 
-// Validate and preview a notification template with size-limit checks
+// 校验并预览通知模板，含大小限制检查
 client.ValidateTemplate(ctx, &ValidateTemplateInput{...}) (*ValidateTemplateOutput, error)
 ```
 
-#### Static Template Data
+#### 静态模板数据
 
-These package-level functions return compiled-in reference data for template authoring:
+以下包级函数返回编译进 SDK 的参考数据，用于编写模板：
 
 ```go
-// Available template variables (40 variables across 7 categories)
+// 可用的模板变量（7 个分类共 40 个变量）
 flashduty.TemplateVariables() []TemplateVariable
 
-// Custom Flashduty template functions (19 functions)
+// Flashduty 自定义模板函数（19 个）
 flashduty.TemplateCustomFunctions() []TemplateFunction
 
-// Commonly used Sprig template functions (19 functions)
+// 常用的 Sprig 模板函数（19 个）
 flashduty.TemplateSprigFunctions() []TemplateFunction
 
-// Valid notification channel identifiers (13 channels)
+// 合法的通知渠道标识（13 个渠道）
 flashduty.ChannelEnumValues() []string
 ```
 
-Supported channels: `dingtalk`, `dingtalk_app`, `feishu`, `feishu_app`, `wecom`, `wecom_app`, `slack`, `slack_app`, `telegram`, `teams_app`, `email`, `sms`, `zoom`.
+支持的通知渠道：`dingtalk`、`dingtalk_app`、`feishu`、`feishu_app`、`wecom`、`wecom_app`、`slack`、`slack_app`、`telegram`、`teams_app`、`email`、`sms`、`zoom`。
 
-Channel size limits and channel-to-field mappings are available via `flashduty.ChannelSizeLimits` and `flashduty.TemplateChannels`.
+渠道大小限制与渠道-字段映射分别通过 `flashduty.ChannelSizeLimits` 和 `flashduty.TemplateChannels` 提供。
 
-> **Note:** Static template data is compiled into the SDK. Platform-side additions require an SDK release.
+> **注意：** 静态模板数据编译在 SDK 内，平台侧新增项需要随 SDK 发版才能获取。
 
-## Data Enrichment
+## 数据补全（Enrichment）
 
-Most query methods automatically enrich raw API data with human-readable names. For example, `ListIncidents` resolves `CreatorID` to `CreatorName`, `ChannelID` to `ChannelName`, and responder person IDs to names and emails.
+大多数查询方法会自动用可读名称补全原始 API 数据。例如 `ListIncidents` 会把 `CreatorID` 解析为 `CreatorName`、`ChannelID` 解析为 `ChannelName`、响应人的人员 ID 解析为姓名和邮箱。
 
-Enrichment uses concurrent batch fetches via `errgroup`. For methods like `ListChanges` and `ListChannels`, enrichment failures are best-effort -- the primary data is still returned even if name resolution fails.
+补全通过 `errgroup` 并发批量拉取。对 `ListChanges`、`ListChannels` 等方法，补全采用尽力而为策略——即使名称解析失败，主数据仍会返回。
 
-## Output Formats
+## 输出格式
 
-The SDK supports JSON and [TOON](https://github.com/toon-format/toon-go) (Token-Oriented Object Notation) serialization:
+SDK 支持 JSON 与 [TOON](https://github.com/toon-format/toon-go)（Token-Oriented Object Notation）序列化：
 
 ```go
 data, err := flashduty.Marshal(incidents, flashduty.OutputFormatJSON)
 data, err := flashduty.Marshal(incidents, flashduty.OutputFormatTOON)
 
-format := flashduty.ParseOutputFormat("toon") // defaults to JSON for unknown values
+format := flashduty.ParseOutputFormat("toon") // 未知值默认回退到 JSON
 ```
 
-## Error Handling
+## 错误处理
 
-API errors are returned as `*DutyError` which implements the `error` interface:
+API 错误以 `*DutyError` 返回，它实现了 `error` 接口：
 
 ```go
 incidents, err := client.ListIncidents(ctx, input)
@@ -273,23 +273,23 @@ if err != nil {
 }
 ```
 
-## Development
+## 开发
 
-Requires Go 1.24+ and [golangci-lint v2](https://golangci-lint.run/welcome/install/).
+需要 Go 1.24+ 和 [golangci-lint v2](https://golangci-lint.run/welcome/install/)。
 
 ```bash
-go test -race ./...   # Run tests with race detection
-golangci-lint run     # Run the linter
+go test -race ./...   # 运行测试（启用竞态检测）
+golangci-lint run     # 运行代码检查
 ```
 
-## Contributing
+## 参与贡献
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and note our [Code of Conduct](CODE_OF_CONDUCT.md).
+欢迎贡献代码！提交 Pull Request 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并遵守我们的[行为准则](CODE_OF_CONDUCT.md)。
 
-- [Report a bug or request a feature](https://github.com/flashcatcloud/flashduty-sdk/issues/new/choose)
-- [Get help and support](SUPPORT.md)
-- [Report a security vulnerability](SECURITY.md)
+- [报告缺陷或提交需求](https://github.com/flashcatcloud/flashduty-sdk/issues/new/choose)
+- [获取帮助与支持](SUPPORT.md)
+- [报告安全漏洞](SECURITY.md)
 
-## License
+## 许可证
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。
