@@ -142,6 +142,15 @@ var sensitiveBodyKeys = map[string]struct{}{
 	"credentials":   {},
 }
 
+// redactChildrenKeys enumerates normalized JSON keys whose nested values are
+// always redacted regardless of inner key name. These containers (env, headers)
+// hold user-chosen keys that frequently carry credentials, so the allow-list
+// approach in sensitiveBodyKeys cannot catch them.
+var redactChildrenKeys = map[string]struct{}{
+	"env":     {},
+	"headers": {},
+}
+
 // sanitizeBody redacts values of well-known sensitive JSON keys so that
 // secrets do not appear in request/response logs. It is best-effort: empty or
 // non-JSON bodies pass through unchanged. Callers must still use sanitizeURL
@@ -178,6 +187,16 @@ func sanitizeJSONValue(v any) (any, bool) {
 				continue
 			}
 
+			// When the value is a container whose user-chosen keys may hold
+			// credentials (env, headers), redact every leaf inside without
+			// inspecting inner names — the allow-list cannot anticipate
+			// arbitrary user-supplied key names like OPENAI_API_KEY.
+			if shouldRedactChildren(key) {
+				sanitized[key] = redactAllLeaves(item)
+				redacted = true
+				continue
+			}
+
 			sanitizedItem, itemRedacted := sanitizeJSONValue(item)
 			sanitized[key] = sanitizedItem
 			redacted = redacted || itemRedacted
@@ -197,8 +216,35 @@ func sanitizeJSONValue(v any) (any, bool) {
 	}
 }
 
+// redactAllLeaves walks v and replaces every non-container leaf with
+// "[REDACTED]", preserving the surrounding map/slice shape so the log entry
+// still hints at the payload structure.
+func redactAllLeaves(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for key, item := range value {
+			out[key] = redactAllLeaves(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, item := range value {
+			out[i] = redactAllLeaves(item)
+		}
+		return out
+	default:
+		return "[REDACTED]"
+	}
+}
+
 func isSensitiveBodyKey(key string) bool {
 	_, ok := sensitiveBodyKeys[normalizeSensitiveBodyKey(key)]
+	return ok
+}
+
+func shouldRedactChildren(key string) bool {
+	_, ok := redactChildrenKeys[normalizeSensitiveBodyKey(key)]
 	return ok
 }
 
