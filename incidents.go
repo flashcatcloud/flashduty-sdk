@@ -270,8 +270,14 @@ type CreateIncidentInput struct {
 	AssignedTo  []int  // Optional person IDs to assign as responders
 }
 
+// CreateIncidentOutput is the data payload of POST /incident/create.
+type CreateIncidentOutput struct {
+	IncidentID string `json:"incident_id"` // 24-hex MongoDB ObjectID of the new incident
+	Title      string `json:"title"`       // echoes the request title
+}
+
 // CreateIncident creates a new incident
-func (c *Client) CreateIncident(ctx context.Context, input *CreateIncidentInput) (any, error) {
+func (c *Client) CreateIncident(ctx context.Context, input *CreateIncidentInput) (*CreateIncidentOutput, error) {
 	requestBody := map[string]any{
 		"title":             input.Title,
 		"incident_severity": input.Severity,
@@ -289,15 +295,11 @@ func (c *Client) CreateIncident(ctx context.Context, input *CreateIncidentInput)
 		}
 	}
 
-	data, err := postData[any](c, ctx, "/incident/create", requestBody, "failed to create incident")
+	data, err := postData[CreateIncidentOutput](c, ctx, "/incident/create", requestBody, "failed to create incident")
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
-		return nil, nil
-	}
-
-	return *data, nil
+	return data, nil
 }
 
 // UpdateIncidentInput contains parameters for updating an incident

@@ -20,10 +20,10 @@ type QueryNotificationTrendOutput struct {
 
 // NotificationTrendPoint preserves the per-channel notification counters for each time bucket.
 type NotificationTrendPoint struct {
-	Timestamp  int64 `json:"ts"`
-	SMSCount   int   `json:"sms_cnt"`
-	VoiceCount int   `json:"voice_cnt"`
-	EmailCount int   `json:"email_cnt"`
+	Timestamp  Timestamp `json:"ts"`
+	SMSCount   int       `json:"sms_cnt"`
+	VoiceCount int       `json:"voice_cnt"`
+	EmailCount int       `json:"email_cnt"`
 }
 
 // QueryNotificationTrend queries notification volume trends over time
@@ -73,9 +73,9 @@ type QueryChangeTrendOutput struct {
 
 // ChangeTrendPoint preserves the change counters for each time bucket.
 type ChangeTrendPoint struct {
-	Timestamp        int64 `json:"ts"`
-	ChangeCount      int   `json:"change_cnt"`
-	ChangeEventCount int   `json:"change_event_cnt"`
+	Timestamp        Timestamp `json:"ts"`
+	ChangeCount      int       `json:"change_cnt"`
+	ChangeEventCount int       `json:"change_event_cnt"`
 }
 
 // QueryChangeTrend queries change volume trends over time

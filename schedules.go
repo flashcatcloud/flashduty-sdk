@@ -31,8 +31,8 @@ type ScheduleGroup struct {
 	GroupName string           `json:"group_name"`
 	Name      string           `json:"name"`
 	Members   []ScheduleMember `json:"members"`
-	Start     int64            `json:"start"`
-	End       int64            `json:"end"`
+	Start     Timestamp        `json:"start"`
+	End       Timestamp        `json:"end"`
 }
 
 // ScheduleLayer represents a configured layer in a schedule.
@@ -46,21 +46,21 @@ type ScheduleLayer struct {
 	Groups                []ScheduleGroup  `json:"groups"`
 	RotationDuration      int64            `json:"rotation_duration"`
 	HandoffTime           int64            `json:"handoff_time"`
-	EnableTime            int64            `json:"enable_time"`
-	ExpireTime            int64            `json:"expire_time"`
+	EnableTime            Timestamp        `json:"enable_time"`
+	ExpireTime            Timestamp        `json:"expire_time"`
 	RestrictMode          int              `json:"restrict_mode"`
 	RestrictStart         int64            `json:"restrict_start"`
 	RestrictEnd           int64            `json:"restrict_end"`
 	RestrictPeriods       []map[string]any `json:"restrict_periods,omitempty"`
 	DayMask               map[string]any   `json:"day_mask,omitempty"`
-	CreateAt              int64            `json:"create_at"`
+	CreateAt              Timestamp        `json:"create_at"`
 	CreateBy              int64            `json:"create_by"`
-	UpdateAt              int64            `json:"update_at"`
+	UpdateAt              Timestamp        `json:"update_at"`
 	UpdateBy              int64            `json:"update_by"`
 	LayerName             string           `json:"layer_name,omitempty"`
 	FairRotation          bool             `json:"fair_rotation,omitempty"`
-	LayerStart            int64            `json:"layer_start,omitempty"`
-	LayerEnd              *int64           `json:"layer_end,omitempty"`
+	LayerStart            Timestamp        `json:"layer_start,omitempty"`
+	LayerEnd              *Timestamp       `json:"layer_end,omitempty"`
 	RotationUnit          string           `json:"rotation_unit,omitempty"`
 	RotationValue         int64            `json:"rotation_value,omitempty"`
 	MaskContinuousEnabled bool             `json:"mask_continuous_enabled,omitempty"`
@@ -68,8 +68,8 @@ type ScheduleLayer struct {
 
 // ScheduleCalculatedSchedule represents a computed slot inside a layer.
 type ScheduleCalculatedSchedule struct {
-	Start int64         `json:"start"`
-	End   int64         `json:"end"`
+	Start Timestamp     `json:"start"`
+	End   Timestamp     `json:"end"`
 	Group ScheduleGroup `json:"group"`
 	Index int           `json:"index"`
 }
@@ -101,10 +101,10 @@ type ScheduleNotify struct {
 
 // ScheduleOncallGroup represents the current or next on-call group snapshot.
 type ScheduleOncallGroup struct {
-	Start    int64         `json:"start"`
-	End      int64         `json:"end"`
+	Start    Timestamp     `json:"start"`
+	End      Timestamp     `json:"end"`
 	Group    ScheduleGroup `json:"group"`
-	UpdateAt int64         `json:"update_at"`
+	UpdateAt Timestamp     `json:"update_at"`
 	Weight   int           `json:"weight"`
 	Index    int           `json:"index"`
 }
@@ -116,16 +116,16 @@ type ScheduleDetail struct {
 	AccountID      int64                     `json:"account_id"`
 	GroupID        *int64                    `json:"group_id,omitempty"`
 	Disabled       *int                      `json:"disabled,omitempty"`
-	CreateAt       int64                     `json:"create_at"`
+	CreateAt       Timestamp                 `json:"create_at"`
 	CreateBy       int64                     `json:"create_by"`
-	UpdateAt       int64                     `json:"update_at"`
+	UpdateAt       Timestamp                 `json:"update_at"`
 	UpdateBy       int64                     `json:"update_by"`
 	Layers         []ScheduleLayer           `json:"layers,omitempty"`
 	Field          string                    `json:"field,omitempty"`
 	ScheduleLayers []ScheduleCalculatedLayer `json:"schedule_layers,omitempty"`
 	FinalSchedule  ScheduleCalculatedLayer   `json:"final_schedule"`
-	Start          int64                     `json:"start,omitempty"`
-	End            int64                     `json:"end,omitempty"`
+	Start          Timestamp                 `json:"start,omitempty"`
+	End            Timestamp                 `json:"end,omitempty"`
 	Notify         ScheduleNotify            `json:"notify,omitempty"`
 	ScheduleID     int64                     `json:"schedule_id"`
 	ScheduleName   *string                   `json:"schedule_name,omitempty"`

@@ -10,9 +10,9 @@ type EnrichedIncident struct {
 	Progress    string `json:"progress" toon:"progress"`
 
 	// Time fields
-	StartTime int64 `json:"start_time" toon:"start_time"`
-	AckTime   int64 `json:"ack_time,omitempty" toon:"ack_time,omitempty"`
-	CloseTime int64 `json:"close_time,omitempty" toon:"close_time,omitempty"`
+	StartTime Timestamp `json:"start_time" toon:"start_time"`
+	AckTime   Timestamp `json:"ack_time,omitempty" toon:"ack_time,omitempty"`
+	CloseTime Timestamp `json:"close_time,omitempty" toon:"close_time,omitempty"`
 
 	// Channel (enriched)
 	ChannelID   int64  `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
@@ -44,20 +44,20 @@ type EnrichedIncident struct {
 
 // EnrichedResponder contains responder info with human-readable names
 type EnrichedResponder struct {
-	PersonID       int64  `json:"person_id" toon:"person_id"`
-	PersonName     string `json:"person_name" toon:"person_name"`
-	Email          string `json:"email,omitempty" toon:"email,omitempty"`
-	AssignedAt     int64  `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
-	AcknowledgedAt int64  `json:"acknowledged_at,omitempty" toon:"acknowledged_at,omitempty"`
+	PersonID       int64     `json:"person_id" toon:"person_id"`
+	PersonName     string    `json:"person_name" toon:"person_name"`
+	Email          string    `json:"email,omitempty" toon:"email,omitempty"`
+	AssignedAt     Timestamp `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
+	AcknowledgedAt Timestamp `json:"acknowledged_at,omitempty" toon:"acknowledged_at,omitempty"`
 }
 
 // TimelineEvent represents an entry in incident timeline
 type TimelineEvent struct {
-	Type         string `json:"type" toon:"type"`
-	Timestamp    int64  `json:"timestamp" toon:"timestamp"`
-	OperatorID   int64  `json:"operator_id,omitempty" toon:"operator_id,omitempty"`
-	OperatorName string `json:"operator_name,omitempty" toon:"operator_name,omitempty"`
-	Detail       any    `json:"detail,omitempty" toon:"detail,omitempty"`
+	Type         string         `json:"type" toon:"type"`
+	Timestamp    TimestampMilli `json:"timestamp" toon:"timestamp"`
+	OperatorID   int64          `json:"operator_id,omitempty" toon:"operator_id,omitempty"`
+	OperatorName string         `json:"operator_name,omitempty" toon:"operator_name,omitempty"`
+	Detail       any            `json:"detail,omitempty" toon:"detail,omitempty"`
 }
 
 // AlertPreview represents a preview of an alert
@@ -66,7 +66,7 @@ type AlertPreview struct {
 	Title     string            `json:"title" toon:"title"`
 	Severity  string            `json:"severity" toon:"severity"`
 	Status    string            `json:"status" toon:"status"`
-	StartTime int64             `json:"start_time" toon:"start_time"`
+	StartTime Timestamp         `json:"start_time" toon:"start_time"`
 	Labels    map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
 }
 
@@ -115,8 +115,8 @@ type TeamItem struct {
 	CreatorName   string       `json:"creator_name" toon:"creator_name"`
 	UpdatedBy     int64        `json:"updated_by" toon:"updated_by"`
 	UpdatedByName string       `json:"updated_by_name" toon:"updated_by_name"`
-	CreatedAt     int64        `json:"created_at" toon:"created_at"`
-	UpdatedAt     int64        `json:"updated_at" toon:"updated_at"`
+	CreatedAt     Timestamp    `json:"created_at" toon:"created_at"`
+	UpdatedAt     Timestamp    `json:"updated_at" toon:"updated_at"`
 	PersonIDs     []int64      `json:"person_ids" toon:"person_ids"`
 	RefID         string       `json:"ref_id" toon:"ref_id"`
 	Members       []TeamMember `json:"members,omitempty" toon:"members,omitempty"`
@@ -297,17 +297,17 @@ type StatusChange struct {
 	Description string           `json:"description,omitempty" toon:"description,omitempty"`
 	Type        string           `json:"type" toon:"type"`
 	Status      string           `json:"status" toon:"status"`
-	CreatedAt   int64            `json:"created_at" toon:"created_at"`
-	UpdatedAt   int64            `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
+	CreatedAt   Timestamp        `json:"created_at" toon:"created_at"`
+	UpdatedAt   Timestamp        `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
 	Timelines   []ChangeTimeline `json:"timelines,omitempty" toon:"timelines,omitempty"`
 }
 
 // ChangeTimeline represents a timeline entry in status change
 type ChangeTimeline struct {
-	TimelineID  int64  `json:"timeline_id" toon:"timeline_id"`
-	At          int64  `json:"at" toon:"at"`
-	Status      string `json:"status,omitempty" toon:"status,omitempty"`
-	Description string `json:"description,omitempty" toon:"description,omitempty"`
+	TimelineID  int64     `json:"timeline_id" toon:"timeline_id"`
+	At          Timestamp `json:"at" toon:"at"`
+	Status      string    `json:"status,omitempty" toon:"status,omitempty"`
+	Description string    `json:"description,omitempty" toon:"description,omitempty"`
 }
 
 // Change represents a change record
@@ -321,8 +321,8 @@ type Change struct {
 	ChannelName string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
 	CreatorID   int64             `json:"creator_id,omitempty" toon:"creator_id,omitempty"`
 	CreatorName string            `json:"creator_name,omitempty" toon:"creator_name,omitempty"`
-	StartTime   int64             `json:"start_time,omitempty" toon:"start_time,omitempty"`
-	EndTime     int64             `json:"end_time,omitempty" toon:"end_time,omitempty"`
+	StartTime   Timestamp         `json:"start_time,omitempty" toon:"start_time,omitempty"`
+	EndTime     Timestamp         `json:"end_time,omitempty" toon:"end_time,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
 }
 
@@ -330,8 +330,8 @@ type Change struct {
 type RawTimelineItem struct {
 	RefID     string         `json:"ref_id,omitempty"`
 	Type      string         `json:"type"`
-	CreatedAt int64          `json:"created_at"`
-	UpdatedAt int64          `json:"updated_at,omitempty"`
+	CreatedAt TimestampMilli `json:"created_at"`
+	UpdatedAt TimestampMilli `json:"updated_at,omitempty"`
 	AccountID int64          `json:"account_id,omitempty"`
 	CreatorID int64          `json:"creator_id,omitempty"`
 	PersonID  int64          `json:"person_id,omitempty"`
@@ -345,9 +345,9 @@ type RawIncident struct {
 	Description string            `json:"description,omitempty"`
 	Severity    string            `json:"incident_severity"`
 	Progress    string            `json:"progress"`
-	StartTime   int64             `json:"start_time"`
-	AckTime     int64             `json:"ack_time,omitempty"`
-	CloseTime   int64             `json:"close_time,omitempty"`
+	StartTime   Timestamp         `json:"start_time"`
+	AckTime     Timestamp         `json:"ack_time,omitempty"`
+	CloseTime   Timestamp         `json:"close_time,omitempty"`
 	ChannelID   int64             `json:"channel_id,omitempty"`
 	CreatorID   int64             `json:"creator_id,omitempty"`
 	CloserID    int64             `json:"closer_id,omitempty"`
@@ -358,24 +358,24 @@ type RawIncident struct {
 
 // RawResponder represents raw responder data from API
 type RawResponder struct {
-	PersonID       int64  `json:"person_id"`
-	AssignedAt     int64  `json:"assigned_at,omitempty"`
-	AcknowledgedAt int64  `json:"acknowledged_at,omitempty"`
-	PersonName     string `json:"person_name,omitempty"`
-	Email          string `json:"email,omitempty"`
-	As             string `json:"as,omitempty"`
+	PersonID       int64     `json:"person_id"`
+	AssignedAt     Timestamp `json:"assigned_at,omitempty"`
+	AcknowledgedAt Timestamp `json:"acknowledged_at,omitempty"`
+	PersonName     string    `json:"person_name,omitempty"`
+	Email          string    `json:"email,omitempty"`
+	As             string    `json:"as,omitempty"`
 }
 
 // AssignedTo represents the current assignment target for an incident.
 type AssignedTo struct {
-	PersonIDs        []int64  `json:"person_ids,omitempty" toon:"person_ids,omitempty"`
-	EscalateRuleID   string   `json:"escalate_rule_id,omitempty" toon:"escalate_rule_id,omitempty"`
-	LayerIdx         int      `json:"layer_idx,omitempty" toon:"layer_idx,omitempty"`
-	Type             string   `json:"type,omitempty" toon:"type,omitempty"`
-	Emails           []string `json:"emails,omitempty" toon:"emails,omitempty"`
-	EscalateRuleName string   `json:"escalate_rule_name,omitempty" toon:"escalate_rule_name,omitempty"`
-	AssignedAt       int64    `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
-	ID               string   `json:"id,omitempty" toon:"id,omitempty"`
+	PersonIDs        []int64   `json:"person_ids,omitempty" toon:"person_ids,omitempty"`
+	EscalateRuleID   string    `json:"escalate_rule_id,omitempty" toon:"escalate_rule_id,omitempty"`
+	LayerIdx         int       `json:"layer_idx,omitempty" toon:"layer_idx,omitempty"`
+	Type             string    `json:"type,omitempty" toon:"type,omitempty"`
+	Emails           []string  `json:"emails,omitempty" toon:"emails,omitempty"`
+	EscalateRuleName string    `json:"escalate_rule_name,omitempty" toon:"escalate_rule_name,omitempty"`
+	AssignedAt       Timestamp `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
+	ID               string    `json:"id,omitempty" toon:"id,omitempty"`
 }
 
 // MemberListResponse represents the response for member list API
@@ -391,19 +391,19 @@ type MemberListResponse struct {
 
 // MemberItem represents a member item as defined in the OpenAPI spec
 type MemberItem struct {
-	MemberID       int    `json:"member_id"`
-	MemberName     string `json:"member_name"`
-	Phone          string `json:"phone,omitempty"`
-	PhoneVerified  bool   `json:"phone_verified,omitempty"`
-	Email          string `json:"email,omitempty"`
-	EmailVerified  bool   `json:"email_verified,omitempty"`
-	AccountRoleIDs []int  `json:"account_role_ids,omitempty"`
-	TimeZone       string `json:"time_zone,omitempty"`
-	Locale         string `json:"locale,omitempty"`
-	Status         string `json:"status"`
-	CreatedAt      int64  `json:"created_at"`
-	UpdatedAt      int64  `json:"updated_at"`
-	RefID          string `json:"ref_id,omitempty"`
+	MemberID       int       `json:"member_id"`
+	MemberName     string    `json:"member_name"`
+	Phone          string    `json:"phone,omitempty"`
+	PhoneVerified  bool      `json:"phone_verified,omitempty"`
+	Email          string    `json:"email,omitempty"`
+	EmailVerified  bool      `json:"email_verified,omitempty"`
+	AccountRoleIDs []int     `json:"account_role_ids,omitempty"`
+	TimeZone       string    `json:"time_zone,omitempty"`
+	Locale         string    `json:"locale,omitempty"`
+	Status         string    `json:"status"`
+	CreatedAt      Timestamp `json:"created_at"`
+	UpdatedAt      Timestamp `json:"updated_at"`
+	RefID          string    `json:"ref_id,omitempty"`
 }
 
 // MemberItemShort represents a short member item for invite response
@@ -430,15 +430,15 @@ type TemplateFunction struct {
 
 // MetricsBase represents the shared bucket and dimension fields returned by /insight/* APIs.
 type MetricsBase struct {
-	Hours         string `json:"hours,omitempty" toon:"hours,omitempty"`
-	TS            int64  `json:"ts,omitempty" toon:"ts,omitempty"`
-	ChannelID     int64  `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
-	TeamID        int64  `json:"team_id,omitempty" toon:"team_id,omitempty"`
-	ResponderID   int64  `json:"responder_id,omitempty" toon:"responder_id,omitempty"`
-	AccountID     int64  `json:"account_id,omitempty" toon:"account_id,omitempty"`
-	TeamName      string `json:"team_name,omitempty" toon:"team_name,omitempty"`
-	ChannelName   string `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
-	ResponderName string `json:"responder_name,omitempty" toon:"responder_name,omitempty"`
+	Hours         string    `json:"hours,omitempty" toon:"hours,omitempty"`
+	TS            Timestamp `json:"ts,omitempty" toon:"ts,omitempty"`
+	ChannelID     int64     `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	TeamID        int64     `json:"team_id,omitempty" toon:"team_id,omitempty"`
+	ResponderID   int64     `json:"responder_id,omitempty" toon:"responder_id,omitempty"`
+	AccountID     int64     `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	TeamName      string    `json:"team_name,omitempty" toon:"team_name,omitempty"`
+	ChannelName   string    `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	ResponderName string    `json:"responder_name,omitempty" toon:"responder_name,omitempty"`
 }
 
 // DimensionInsightItem represents pre-aggregated metrics for a team or channel dimension.
@@ -506,7 +506,7 @@ type InsightIncidentItem struct {
 	ChannelName        string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
 	Progress           string            `json:"progress" toon:"progress"`
 	Severity           string            `json:"severity" toon:"severity"`
-	CreatedAt          int64             `json:"created_at" toon:"created_at"`
+	CreatedAt          Timestamp         `json:"created_at" toon:"created_at"`
 	ClosedBy           string            `json:"closed_by,omitempty" toon:"closed_by,omitempty"`
 	SecondsToAck       int               `json:"seconds_to_ack" toon:"seconds_to_ack"`
 	SecondsToClose     int               `json:"seconds_to_close" toon:"seconds_to_close"`
@@ -535,9 +535,9 @@ type IncidentDetail struct {
 	Description   string            `json:"description,omitempty" toon:"description,omitempty"`
 	Severity      string            `json:"incident_severity" toon:"severity"`
 	Progress      string            `json:"progress" toon:"progress"`
-	StartTime     int64             `json:"start_time" toon:"start_time"`
-	AckTime       int64             `json:"ack_time,omitempty" toon:"ack_time,omitempty"`
-	CloseTime     int64             `json:"close_time,omitempty" toon:"close_time,omitempty"`
+	StartTime     Timestamp         `json:"start_time" toon:"start_time"`
+	AckTime       Timestamp         `json:"ack_time,omitempty" toon:"ack_time,omitempty"`
+	CloseTime     Timestamp         `json:"close_time,omitempty" toon:"close_time,omitempty"`
 	ChannelID     int64             `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
 	ChannelName   string            `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
 	CreatorID     int64             `json:"creator_id,omitempty" toon:"creator_id,omitempty"`
@@ -557,20 +557,20 @@ type IncidentDetail struct {
 
 // PostMortem represents post-mortem metadata returned by /incident/post-mortem/list.
 type PostMortem struct {
-	AccountID        int64    `json:"account_id,omitempty" toon:"account_id,omitempty"`
-	PostMortemID     string   `json:"post_mortem_id" toon:"post_mortem_id"`
-	TemplateID       string   `json:"template_id,omitempty" toon:"template_id,omitempty"`
-	IncidentIDs      []string `json:"incident_ids,omitempty" toon:"incident_ids,omitempty"`
-	MediaCount       int      `json:"media_count,omitempty" toon:"media_count,omitempty"`
-	AuthorIDs        []int64  `json:"author_ids,omitempty" toon:"author_ids,omitempty"`
-	TeamID           int64    `json:"team_id,omitempty" toon:"team_id,omitempty"`
-	ChannelID        int64    `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
-	ChannelName      string   `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
-	IsPrivate        bool     `json:"is_private,omitempty" toon:"is_private,omitempty"`
-	Title            string   `json:"title,omitempty" toon:"title,omitempty"`
-	Status           string   `json:"status,omitempty" toon:"status,omitempty"`
-	CreatedAtSeconds int64    `json:"created_at_seconds,omitempty" toon:"created_at_seconds,omitempty"`
-	UpdatedAtSeconds int64    `json:"updated_at_seconds,omitempty" toon:"updated_at_seconds,omitempty"`
+	AccountID        int64     `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	PostMortemID     string    `json:"post_mortem_id" toon:"post_mortem_id"`
+	TemplateID       string    `json:"template_id,omitempty" toon:"template_id,omitempty"`
+	IncidentIDs      []string  `json:"incident_ids,omitempty" toon:"incident_ids,omitempty"`
+	MediaCount       int       `json:"media_count,omitempty" toon:"media_count,omitempty"`
+	AuthorIDs        []int64   `json:"author_ids,omitempty" toon:"author_ids,omitempty"`
+	TeamID           int64     `json:"team_id,omitempty" toon:"team_id,omitempty"`
+	ChannelID        int64     `json:"channel_id,omitempty" toon:"channel_id,omitempty"`
+	ChannelName      string    `json:"channel_name,omitempty" toon:"channel_name,omitempty"`
+	IsPrivate        bool      `json:"is_private,omitempty" toon:"is_private,omitempty"`
+	Title            string    `json:"title,omitempty" toon:"title,omitempty"`
+	Status           string    `json:"status,omitempty" toon:"status,omitempty"`
+	CreatedAtSeconds Timestamp `json:"created_at_seconds,omitempty" toon:"created_at_seconds,omitempty"`
+	UpdatedAtSeconds Timestamp `json:"updated_at_seconds,omitempty" toon:"updated_at_seconds,omitempty"`
 }
 
 // AlertEvent represents a raw alert event
@@ -585,10 +585,10 @@ type AlertEvent struct {
 	Description     string            `json:"description,omitempty" toon:"description,omitempty"`
 	EventSeverity   string            `json:"event_severity" toon:"event_severity"`
 	EventStatus     string            `json:"event_status" toon:"event_status"`
-	EventTime       int64             `json:"event_time" toon:"event_time"`
+	EventTime       Timestamp         `json:"event_time" toon:"event_time"`
 	Labels          map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`
-	CreatedAt       int64             `json:"created_at,omitempty" toon:"created_at,omitempty"`
-	UpdatedAt       int64             `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
+	CreatedAt       Timestamp         `json:"created_at,omitempty" toon:"created_at,omitempty"`
+	UpdatedAt       Timestamp         `json:"updated_at,omitempty" toon:"updated_at,omitempty"`
 }
 
 // Alert represents a deduplicated alert entity (Layer 1)
@@ -604,9 +604,9 @@ type Alert struct {
 	AlertKey        string            `json:"alert_key,omitempty" toon:"alert_key,omitempty"`
 	AlertSeverity   string            `json:"alert_severity" toon:"alert_severity"`
 	AlertStatus     string            `json:"alert_status" toon:"alert_status"`
-	StartTime       int64             `json:"start_time" toon:"start_time"`
-	LastTime        int64             `json:"last_time,omitempty" toon:"last_time,omitempty"`
-	EndTime         int64             `json:"end_time,omitempty" toon:"end_time,omitempty"`
+	StartTime       Timestamp         `json:"start_time" toon:"start_time"`
+	LastTime        Timestamp         `json:"last_time,omitempty" toon:"last_time,omitempty"`
+	EndTime         Timestamp         `json:"end_time,omitempty" toon:"end_time,omitempty"`
 	EventCnt        int               `json:"event_cnt,omitempty" toon:"event_cnt,omitempty"`
 	EverMuted       bool              `json:"ever_muted,omitempty" toon:"ever_muted,omitempty"`
 	Labels          map[string]string `json:"labels,omitempty" toon:"labels,omitempty"`

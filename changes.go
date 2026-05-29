@@ -124,8 +124,8 @@ func (c *Client) ListChanges(ctx context.Context, input *ListChangesInput) (*Lis
 			Status:      item.Status,
 			ChannelID:   item.ChannelID,
 			CreatorID:   item.CreatorID,
-			StartTime:   item.StartTime,
-			EndTime:     item.EndTime,
+			StartTime:   Timestamp(item.StartTime),
+			EndTime:     Timestamp(item.EndTime),
 			Labels:      item.Labels,
 		}
 
