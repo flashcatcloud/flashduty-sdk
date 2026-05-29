@@ -60,7 +60,7 @@ func (c *Client) fetchIncidentAlerts(ctx context.Context, incidentID string, lim
 			Title:     item.Title,
 			Severity:  item.Severity,
 			Status:    item.Status,
-			StartTime: item.TriggerTime,
+			StartTime: Timestamp(item.TriggerTime),
 			Labels:    item.Labels,
 		})
 	}

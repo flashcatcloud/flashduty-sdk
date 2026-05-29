@@ -34,7 +34,7 @@ type AuditLogParam struct {
 
 // AuditLogRecord represents a single audit log entry returned by /audit/search.
 type AuditLogRecord struct {
-	CreatedAt     int64           `json:"created_at"`
+	CreatedAt     TimestampMilli  `json:"created_at"`
 	AccountID     int64           `json:"account_id"`
 	MemberID      int64           `json:"member_id"`
 	MemberName    string          `json:"member_name"`

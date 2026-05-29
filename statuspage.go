@@ -125,8 +125,14 @@ type CreateStatusIncidentInput struct {
 	NotifySubscribers  bool   // Whether to notify page subscribers
 }
 
+// CreateStatusIncidentOutput is the data payload of POST /status-page/change/create.
+type CreateStatusIncidentOutput struct {
+	ChangeID   int64  `json:"change_id"`   // ID of the newly created status-page change/incident
+	ChangeName string `json:"change_name"` // event title, echoed from the request
+}
+
 // CreateStatusIncident creates an incident on a status page
-func (c *Client) CreateStatusIncident(ctx context.Context, input *CreateStatusIncidentInput) (any, error) {
+func (c *Client) CreateStatusIncident(ctx context.Context, input *CreateStatusIncidentInput) (*CreateStatusIncidentOutput, error) {
 	status := input.Status
 	if status == "" {
 		status = "investigating"
@@ -178,15 +184,11 @@ func (c *Client) CreateStatusIncident(ctx context.Context, input *CreateStatusIn
 		"notify_subscribers": input.NotifySubscribers,
 	}
 
-	data, err := postData[any](c, ctx, "/status-page/change/create", requestBody, "failed to create status incident")
+	data, err := postData[CreateStatusIncidentOutput](c, ctx, "/status-page/change/create", requestBody, "failed to create status incident")
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
-		return nil, nil
-	}
-
-	return *data, nil
+	return data, nil
 }
 
 // CreateChangeTimelineInput contains parameters for adding a timeline entry
@@ -272,8 +274,8 @@ type StatusPageMigrationJob struct {
 	Status       string                      `json:"status"`
 	Progress     StatusPageMigrationProgress `json:"progress"`
 	Error        string                      `json:"error,omitempty"`
-	CreatedAt    int64                       `json:"created_at"`
-	UpdatedAt    int64                       `json:"updated_at"`
+	CreatedAt    Timestamp                   `json:"created_at"`
+	UpdatedAt    Timestamp                   `json:"updated_at"`
 }
 
 // StartStatusPageMigration starts an asynchronous migration of status page

@@ -62,16 +62,16 @@ type IncidentWarRoomAddMemberInput struct {
 
 // IncidentWarRoom represents an IM war room.
 type IncidentWarRoom struct {
-	AccountID     int64  `json:"account_id,omitempty" toon:"account_id,omitempty"`
-	IntegrationID int64  `json:"integration_id,omitempty" toon:"integration_id,omitempty"`
-	ChatID        string `json:"chat_id" toon:"chat_id"`
-	ChatName      string `json:"chat_name,omitempty" toon:"chat_name,omitempty"`
-	ShareLink     string `json:"share_link,omitempty" toon:"share_link,omitempty"`
-	IncidentID    string `json:"incident_id,omitempty" toon:"incident_id,omitempty"`
-	CreatedBy     int64  `json:"created_by,omitempty" toon:"created_by,omitempty"`
-	CreatedAt     int64  `json:"created_at,omitempty" toon:"created_at,omitempty"`
-	PluginType    string `json:"plugin_type,omitempty" toon:"plugin_type,omitempty"`
-	Status        string `json:"status,omitempty" toon:"status,omitempty"`
+	AccountID     int64     `json:"account_id,omitempty" toon:"account_id,omitempty"`
+	IntegrationID int64     `json:"integration_id,omitempty" toon:"integration_id,omitempty"`
+	ChatID        string    `json:"chat_id" toon:"chat_id"`
+	ChatName      string    `json:"chat_name,omitempty" toon:"chat_name,omitempty"`
+	ShareLink     string    `json:"share_link,omitempty" toon:"share_link,omitempty"`
+	IncidentID    string    `json:"incident_id,omitempty" toon:"incident_id,omitempty"`
+	CreatedBy     int64     `json:"created_by,omitempty" toon:"created_by,omitempty"`
+	CreatedAt     Timestamp `json:"created_at,omitempty" toon:"created_at,omitempty"`
+	PluginType    string    `json:"plugin_type,omitempty" toon:"plugin_type,omitempty"`
+	Status        string    `json:"status,omitempty" toon:"status,omitempty"`
 }
 
 // IncidentWarRoomItem represents a war room list item.
@@ -84,14 +84,14 @@ type IncidentWarRoomListOutput struct {
 
 // IncidentWarRoomObserver represents a default observer candidate for war room invitation.
 type IncidentWarRoomObserver struct {
-	PersonID   int64  `json:"person_id" toon:"person_id"`
-	PersonName string `json:"person_name,omitempty" toon:"person_name,omitempty"`
-	Nickname   string `json:"nickname,omitempty" toon:"nickname,omitempty"`
-	Name       string `json:"name,omitempty" toon:"name,omitempty"`
-	Email      string `json:"email,omitempty" toon:"email,omitempty"`
-	Phone      string `json:"phone,omitempty" toon:"phone,omitempty"`
-	Status     string `json:"status,omitempty" toon:"status,omitempty"`
-	AssignedAt int64  `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
+	PersonID   int64     `json:"person_id" toon:"person_id"`
+	PersonName string    `json:"person_name,omitempty" toon:"person_name,omitempty"`
+	Nickname   string    `json:"nickname,omitempty" toon:"nickname,omitempty"`
+	Name       string    `json:"name,omitempty" toon:"name,omitempty"`
+	Email      string    `json:"email,omitempty" toon:"email,omitempty"`
+	Phone      string    `json:"phone,omitempty" toon:"phone,omitempty"`
+	Status     string    `json:"status,omitempty" toon:"status,omitempty"`
+	AssignedAt Timestamp `json:"assigned_at,omitempty" toon:"assigned_at,omitempty"`
 }
 
 // DisplayName returns the best available human-readable observer name.
