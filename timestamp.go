@@ -27,13 +27,22 @@ func (t Timestamp) Unix() int64 { return int64(t) }
 // IsZero reports whether the value is the unset sentinel (0).
 func (t Timestamp) IsZero() bool { return t == 0 }
 
+// String renders the instant as RFC3339 in the local timezone, or "0" when
+// unset. Non-JSON encoders (TOON, fmt) render the value through this method.
+func (t Timestamp) String() string {
+	if t == 0 {
+		return "0"
+	}
+	return t.Time().In(time.Local).Format(time.RFC3339)
+}
+
 // MarshalJSON renders a non-zero value as a quoted RFC3339 string in the local
 // timezone; zero renders as the bare integer 0.
 func (t Timestamp) MarshalJSON() ([]byte, error) {
 	if t == 0 {
 		return []byte("0"), nil
 	}
-	return []byte(strconv.Quote(t.Time().In(time.Local).Format(time.RFC3339))), nil
+	return []byte(strconv.Quote(t.String())), nil
 }
 
 // UnmarshalJSON accepts a numeric Unix-seconds epoch, a quoted integer, an
@@ -61,6 +70,16 @@ func (t TimestampMilli) Unix() int64 { return int64(t) }
 // IsZero reports whether the value is the unset sentinel (0).
 func (t TimestampMilli) IsZero() bool { return t == 0 }
 
+// String renders the instant as RFC3339Nano in the local timezone (preserving
+// sub-second precision), or "0" when unset. Non-JSON encoders (TOON, fmt)
+// render the value through this method.
+func (t TimestampMilli) String() string {
+	if t == 0 {
+		return "0"
+	}
+	return t.Time().In(time.Local).Format(time.RFC3339Nano)
+}
+
 // MarshalJSON renders a non-zero value as a quoted RFC3339 string in the local
 // timezone; zero renders as the bare integer 0. RFC3339Nano is used so that
 // sub-second (millisecond) precision survives a marshal→unmarshal round-trip;
@@ -70,7 +89,7 @@ func (t TimestampMilli) MarshalJSON() ([]byte, error) {
 	if t == 0 {
 		return []byte("0"), nil
 	}
-	return []byte(strconv.Quote(t.Time().In(time.Local).Format(time.RFC3339Nano))), nil
+	return []byte(strconv.Quote(t.String())), nil
 }
 
 // UnmarshalJSON accepts a numeric Unix-milliseconds epoch, a quoted integer, an
