@@ -72,10 +72,12 @@ Flashduty MCP server. Treat every exported symbol as a public API surface.
 
 ## Versioning & compatibility
 
-- Pre-1.0 (`v0.x`). Under Go module rules a `v0.x` bump carries no compat guarantee, but
-  this is a published SDK: treat any exported-type or signature change as **breaking** and
-  call it out explicitly in the PR description. Breaking changes bump the **minor** (`v0.(x+1).0`).
-- Consumers pin via pseudo-version (`go get github.com/flashcatcloud/flashduty-sdk@<sha>`).
+- Pre-1.0 (`v0.x`): a `v0.x` bump carries no compat guarantee (Go module rules), so keep
+  version churn minimal — each release bumps the **patch** (`v0.x.(z+1)`). Breaking changes
+  (exported-type or signature changes) are permitted pre-1.0, but **MUST be called out
+  explicitly in the PR description** so consumers upgrade deliberately. Reserve a minor bump
+  for a deliberate milestone, not for every break.
+- Consumers pin via tag or pseudo-version (`go get github.com/flashcatcloud/flashduty-sdk@v0.x.y`).
 
 ## Git workflow
 
